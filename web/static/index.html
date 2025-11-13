@@ -1,0 +1,766 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Medical Scribe - Doctor Portal</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body { 
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container { max-width: 1600px; margin: 0 auto; }
+    
+    .header { 
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(10px);
+      padding: 30px 40px;
+      margin-bottom: 30px;
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-left h1 { 
+      font-size: 32px; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    .header-left p { color: #666; font-size: 14px; }
+    .header-right { text-align: right; }
+    .header-badge { 
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .header-time { color: #888; font-size: 13px; }
+    
+    .card { 
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(10px);
+      padding: 35px;
+      margin-bottom: 25px;
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+    
+    .card h2 { 
+      color: #2d3748;
+      margin-bottom: 25px;
+      padding-bottom: 15px;
+      border-bottom: 3px solid #667eea;
+      font-size: 22px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .section-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    
+    .form-grid { 
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 25px;
+      margin-bottom: 25px;
+    }
+    
+    .form-group { display: flex; flex-direction: column; }
+    .form-group label { 
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 10px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .required { color: #e53e3e; }
+    
+    .form-group input, .form-group select, .form-group textarea { 
+      padding: 14px 16px;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      font-size: 15px;
+      transition: all 0.3s ease;
+      background: white;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { 
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .btn { 
+      padding: 14px 32px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .btn span {
+      font-size: 1.1em;
+      display: inline-block;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
+    .btn:active { transform: translateY(0); }
+    
+    .btn-primary { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .btn-success { 
+      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      color: white;
+    }
+    .btn-danger { 
+      background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+      color: white;
+    }
+    .btn-upload {
+      background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+      color: white;
+    }
+    
+    .recording-section { 
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 20px;
+      background: #f7fafc;
+      border-radius: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .status { 
+      padding: 10px 20px;
+      border-radius: 25px;
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status.recording { 
+      background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+      color: white;
+      animation: pulse 1.5s infinite;
+    }
+    .status.idle { 
+      background: #cbd5e0;
+      color: #4a5568;
+    }
+    
+    @keyframes pulse { 
+      0%, 100% { opacity: 1; transform: scale(1); } 
+      50% { opacity: 0.8; transform: scale(1.05); } 
+    }
+    
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: white;
+      border-radius: 50%;
+      animation: pulse-dot 1.5s infinite;
+    }
+    
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    
+    textarea.large { 
+      min-height: 180px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+    }
+    
+    .symptom-box { 
+      padding: 20px;
+      border-radius: 15px;
+      margin-top: 20px;
+      border: 2px solid;
+    }
+    .symptom-box.matched { 
+      background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
+      border-color: #48bb78;
+    }
+    .symptom-box.unknown { 
+      background: linear-gradient(135deg, #feebc8 0%, #fbd38d 100%);
+      border-color: #ed8936;
+    }
+    .symptom-box h3 { 
+      margin-bottom: 15px;
+      font-size: 18px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .symptom-list { list-style: none; }
+    .symptom-list li { 
+      padding: 12px 16px;
+      margin: 8px 0;
+      background: white;
+      border-radius: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      transition: all 0.3s ease;
+    }
+    .symptom-list li:hover { 
+      transform: translateX(5px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    
+    .symptom-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #e2e8f0;
+      color: #4a5568;
+    }
+    
+    .summary-output { 
+      background: #2d3748;
+      color: #e2e8f0;
+      padding: 25px;
+      border-radius: 15px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      white-space: pre-wrap;
+      line-height: 1.8;
+      font-size: 13px;
+      box-shadow: inset 0 2px 8px rgba(0,0,0,0.3);
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    
+    .summary-output::-webkit-scrollbar { width: 8px; }
+    .summary-output::-webkit-scrollbar-track { background: #1a202c; border-radius: 10px; }
+    .summary-output::-webkit-scrollbar-thumb { background: #667eea; border-radius: 10px; }
+    
+    .hidden { display: none; }
+    
+    .two-column { 
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 25px;
+    }
+    
+    .progress-steps {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      position: relative;
+    }
+    
+    .progress-step {
+      flex: 1;
+      text-align: center;
+      position: relative;
+    }
+    
+    .step-circle {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      color: #a0aec0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 10px;
+      font-weight: 700;
+      font-size: 18px;
+      transition: all 0.3s ease;
+    }
+    
+    .step-circle.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .step-circle.completed {
+      background: #48bb78;
+      color: white;
+    }
+    
+    .step-label {
+      font-size: 13px;
+      color: #718096;
+      font-weight: 600;
+    }
+    
+    .step-label.active {
+      color: #667eea;
+    }
+    
+    @media (max-width: 768px) {
+      .two-column { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+      .header { flex-direction: column; text-align: center; }
+      .header-right { text-align: center; margin-top: 15px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>🏥 AI Medical Scribe System</h1>
+        <p>Intelligent Documentation with Symptom Validation & AIMS Protocol</p>
+      </div>
+      <div class="header-right">
+        <div class="header-badge">✨ AIMS Powered</div>
+        <div class="header-time" id="headerTime">--</div>
+      </div>
+    </div>
+
+    <!-- Progress Steps -->
+    <div class="progress-steps" id="progressSteps">
+      <div class="progress-step">
+        <div class="step-circle active" id="step1">1</div>
+        <div class="step-label active">Doctor Info</div>
+      </div>
+      <div class="progress-step">
+        <div class="step-circle" id="step2">2</div>
+        <div class="step-label">Patient Registration</div>
+      </div>
+      <div class="progress-step">
+        <div class="step-circle" id="step3">3</div>
+        <div class="step-label">Consultation</div>
+      </div>
+      <div class="progress-step">
+        <div class="step-circle" id="step4">4</div>
+        <div class="step-label">Summary</div>
+      </div>
+    </div>
+
+    <!-- Doctor Login Section -->
+    <div class="card" id="doctorSection">
+      <h2><span class="section-icon">👨‍⚕️</span> Doctor Information</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Doctor Name <span class="required">*</span></label>
+          <input type="text" id="doctorName" placeholder="Dr. John Doe" required>
+        </div>
+        <div class="form-group">
+          <label>Department <span class="required">*</span></label>
+          <select id="department" required>
+            <option value="">Select Department</option>
+            <option value="Cardiology">Cardiology</option>
+            <option value="Neurology">Neurology</option>
+            <option value="Orthopedics">Orthopedics</option>
+            <option value="Pediatrics">Pediatrics</option>
+            <option value="General Medicine">General Medicine</option>
+            <option value="ENT">ENT</option>
+            <option value="Dermatology">Dermatology</option>
+            <option value="Psychiatry">Psychiatry</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Designation <span class="required">*</span></label>
+          <input type="text" id="designation" placeholder="Consultant / Senior Resident" required>
+        </div>
+        <div class="form-group">
+          <label>Patient Type <span class="required">*</span></label>
+          <select id="patientType" required>
+            <option value="">Select Type</option>
+            <option value="Out-Patient">Out-Patient (OPD)</option>
+            <option value="In-Patient">In-Patient (IPD)</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="saveDoctorInfo()">
+        <span>✓</span> Save & Continue
+      </button>
+    </div>
+
+    <!-- Patient Registration Section -->
+    <div class="card hidden" id="patientSection">
+      <h2><span class="section-icon">👤</span> Patient Registration</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Patient Name <span class="required">*</span></label>
+          <input type="text" id="patientName" placeholder="Full Name" required>
+        </div>
+        <div class="form-group">
+          <label>UHID (Unique Health ID) <span class="required">*</span></label>
+          <input type="text" id="uhid" placeholder="UHID123456" required>
+        </div>
+        <div class="form-group">
+          <label>Sex <span class="required">*</span></label>
+          <select id="sex" required>
+            <option value="">Select</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Age <span class="required">*</span></label>
+          <input type="number" id="age" placeholder="Age in years" min="0" max="150" required>
+        </div>
+        <div class="form-group">
+          <label>Date of Birth <span class="required">*</span></label>
+          <input type="date" id="dob" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>📅 Visit Date & Time (Auto-captured)</label>
+        <input type="text" id="visitDateTime" readonly style="background: #f7fafc; cursor: not-allowed;">
+      </div>
+      <button class="btn btn-primary" onclick="savePatientInfo()">
+        <span>✓</span> Register Patient & Start Consultation
+      </button>
+    </div>
+
+    <!-- Recording & Transcription Section -->
+    <div class="card hidden" id="consultationSection">
+      <h2><span class="section-icon">🎙️</span> Record Consultation</h2>
+      <div class="recording-section">
+        <button class="btn btn-success" id="startBtn" onclick="startRecording()">
+          <span>▶</span> Start Recording
+        </button>
+        <button class="btn btn-danger" id="stopBtn" disabled onclick="stopRecording()">
+          <span>⏹</span> Stop Recording
+        </button>
+        <span class="status idle" id="statusBadge">
+          <span>⚪</span> Idle
+        </span>
+        <input type="file" id="fileInput" accept="audio/*" style="display:none;">
+        <button class="btn btn-upload" onclick="document.getElementById('fileInput').click()">
+          <span>📁</span> Upload Audio File
+        </button>
+      </div>
+
+      <h3 style="margin-top: 30px; color: #2d3748; font-weight: 600;">📝 Transcript</h3>
+      <textarea id="transcript" class="large" placeholder="Transcription will appear here..."></textarea>
+      
+      <button class="btn btn-primary" onclick="generateSummary()" style="margin-top: 20px;">
+        <span>✨</span> Generate Medical Summary
+      </button>
+    </div>
+
+    <!-- Symptoms Detection Section -->
+    <div class="card hidden" id="symptomsSection">
+      <h2><span class="section-icon">🔍</span> Symptom Analysis (AIMS Protocol)</h2>
+      <div class="two-column">
+        <div class="symptom-box matched">
+          <h3>✅ Validated Symptoms (Matched with Database)</h3>
+          <ul class="symptom-list" id="validatedSymptoms">
+            <li>No symptoms detected yet</li>
+          </ul>
+        </div>
+        <div class="symptom-box unknown">
+          <h3>⚠️ Unknown Mentions (Needs Review)</h3>
+          <ul class="symptom-list" id="unknownSymptoms">
+            <li>No unknown mentions</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Medical Summary Section -->
+    <div class="card hidden" id="summarySection">
+      <h2><span class="section-icon">📋</span> Medical Summary Report</h2>
+      <div class="summary-output" id="summaryOutput">
+        Summary will be generated here...
+      </div>
+      <button class="btn btn-success" onclick="downloadSummary()" style="margin-top: 20px;">
+        <span>💾</span> Download Summary
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let mediaRecorder;
+    let chunks = [];
+    let doctorInfo = {};
+    let patientInfo = {};
+
+    // Update progress steps
+    function updateProgressSteps(activeStep) {
+      const steps = document.querySelectorAll('.progress-step');
+      steps.forEach((step, index) => {
+        if (index < activeStep) {
+          step.classList.add('completed');
+          step.classList.remove('active');
+        } else if (index === activeStep) {
+          step.classList.add('active');
+          step.classList.remove('completed');
+        } else {
+          step.classList.remove('active', 'completed');
+        }
+      });
+    }
+
+    // Update live time in header
+    function updateHeaderTime() {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-IN', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true 
+      });
+      const dateStr = now.toLocaleDateString('en-IN', { 
+        day: '2-digit', 
+        month: 'short', 
+        year: 'numeric' 
+      });
+      document.getElementById('liveTime').textContent = `${dateStr} • ${timeStr}`;
+    }
+
+    // Auto-update visit date/time and header clock
+    setInterval(() => {
+      const now = new Date();
+      document.getElementById('visitDateTime').value = now.toLocaleString('en-IN');
+      updateHeaderTime();
+    }, 1000);
+
+    // Initialize
+    updateProgressSteps(0);
+    updateHeaderTime();
+
+    function saveDoctorInfo() {
+      doctorInfo = {
+        name: document.getElementById('doctorName').value,
+        department: document.getElementById('department').value,
+        designation: document.getElementById('designation').value,
+        patientType: document.getElementById('patientType').value
+      };
+
+      if (!doctorInfo.name || !doctorInfo.department || !doctorInfo.designation || !doctorInfo.patientType) {
+        alert('Please fill all doctor information fields');
+        return;
+      }
+
+      document.getElementById('doctorSection').classList.add('hidden');
+      document.getElementById('patientSection').classList.remove('hidden');
+      updateProgressSteps(1); // Move to Patient Registration step
+    }
+
+    function savePatientInfo() {
+      patientInfo = {
+        name: document.getElementById('patientName').value,
+        uhid: document.getElementById('uhid').value,
+        sex: document.getElementById('sex').value,
+        age: document.getElementById('age').value,
+        dob: document.getElementById('dob').value,
+        visitDateTime: document.getElementById('visitDateTime').value
+      };
+
+      if (!patientInfo.name || !patientInfo.uhid || !patientInfo.sex || !patientInfo.age || !patientInfo.dob) {
+        alert('Please fill all patient information fields');
+        return;
+      }
+
+      document.getElementById('patientSection').classList.add('hidden');
+      document.getElementById('consultationSection').classList.remove('hidden');
+      updateProgressSteps(2); // Move to Consultation step
+    }
+
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = e => chunks.push(e.data);
+        mediaRecorder.onstop = uploadRecording;
+        mediaRecorder.start();
+
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+        document.getElementById('statusBadge').textContent = '🔴 Recording...';
+        document.getElementById('statusBadge').className = 'status recording';
+      } catch (err) {
+        alert('Error accessing microphone: ' + err.message);
+      }
+    }
+
+    function stopRecording() {
+      if (mediaRecorder) mediaRecorder.stop();
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('stopBtn').disabled = true;
+      document.getElementById('statusBadge').textContent = 'Processing...';
+      document.getElementById('statusBadge').className = 'status idle';
+    }
+
+    async function uploadRecording() {
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      chunks = [];
+      const fd = new FormData();
+      fd.append('file', blob, 'recording.webm');
+
+      try {
+        const res = await fetch('/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) {
+          alert('Error: ' + data.error);
+        } else {
+          document.getElementById('transcript').value = data.transcript || '';
+          document.getElementById('statusBadge').textContent = 'Idle';
+        }
+      } catch (err) {
+        alert('Upload failed: ' + err.message);
+      }
+    }
+
+    document.getElementById('fileInput').onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const fd = new FormData();
+      fd.append('file', file);
+
+      try {
+        const res = await fetch('/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+        document.getElementById('transcript').value = data.transcript || '';
+      } catch (err) {
+        alert('Upload failed: ' + err.message);
+      }
+    };
+
+    async function generateSummary() {
+      const transcript = document.getElementById('transcript').value;
+      if (!transcript) return alert('No transcript available');
+
+      const fd = new FormData();
+      fd.append('transcript', transcript);
+      fd.append('doctor_info', JSON.stringify(doctorInfo));
+      fd.append('patient_info', JSON.stringify(patientInfo));
+
+      try {
+        const res = await fetch('/summarize', { method: 'POST', body: fd });
+        const data = await res.json();
+
+        if (data.error) {
+          alert('Error: ' + data.error);
+          return;
+        }
+
+        // Display symptoms
+        displaySymptoms(data.symptoms_present, data.unknown_mentions);
+
+        // Display summary
+        document.getElementById('summaryOutput').textContent = data.summary;
+        document.getElementById('symptomsSection').classList.remove('hidden');
+        document.getElementById('summarySection').classList.remove('hidden');
+        
+        // Update progress to final step
+        updateProgressSteps(3);
+      } catch (err) {
+        alert('Failed to generate summary: ' + err.message);
+      }
+    }
+
+    function displaySymptoms(validated, unknown) {
+      const validList = document.getElementById('validatedSymptoms');
+      const unknownList = document.getElementById('unknownSymptoms');
+
+      validList.innerHTML = '';
+      unknownList.innerHTML = '';
+
+      if (validated && validated.length > 0) {
+        validated.forEach(s => {
+          const li = document.createElement('li');
+          li.innerHTML = `<span><strong>${s.name}</strong> (${s.code}) - ${s.category}</span>`;
+          validList.appendChild(li);
+        });
+      } else {
+        validList.innerHTML = '<li>No validated symptoms found</li>';
+      }
+
+      if (unknown && unknown.length > 0) {
+        unknown.forEach(u => {
+          const li = document.createElement('li');
+          li.innerHTML = `<span>"${u}"</span><button class="btn btn-primary" style="padding: 5px 10px; font-size: 12px;" onclick="reviewUnknown('${u}')">Review</button>`;
+          unknownList.appendChild(li);
+        });
+      } else {
+        unknownList.innerHTML = '<li>No unknown mentions</li>';
+      }
+    }
+
+    function reviewUnknown(mention) {
+      const code = prompt(`Assign code for "${mention}" (e.g., S00378):`);
+      if (!code) return;
+
+      const name = prompt(`Official symptom name:`);
+      if (!name) return;
+
+      const category = prompt(`Category:`);
+      if (!category) return;
+
+      const fd = new FormData();
+      fd.append('mention', mention);
+      fd.append('code', code);
+      fd.append('name', name);
+      fd.append('category', category);
+
+      fetch('/approve_symptom', { method: 'POST', body: fd })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'success') {
+            alert(`Symptom approved: "${mention}" → "${name}" (${code})`);
+            generateSummary(); // Re-generate
+          } else {
+            alert('Approval failed: ' + (data.error || 'Unknown error'));
+          }
+        })
+        .catch(err => alert('Error: ' + err.message));
+    }
+
+    function downloadSummary() {
+      const summary = document.getElementById('summaryOutput').textContent;
+      const blob = new Blob([summary], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Medical_Summary_${patientInfo.uhid}_${new Date().toISOString().split('T')[0]}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>

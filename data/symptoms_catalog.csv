@@ -1,0 +1,378 @@
+code,name,aliases,category
+S00001,anxiety and nervousness,anxiety and nervousness,psychological
+S00002,depression,depression,psychological
+S00003,shortness of breath,shortness of breath,respiratory
+S00004,depressive or psychotic symptoms,depressive or psychotic symptoms,psychological
+S00005,sharp chest pain,sharp chest pain,cardiovascular
+S00006,dizziness,dizziness,neurological
+S00007,insomnia,insomnia,psychological
+S00008,abnormal involuntary movements,abnormal involuntary movements,general
+S00009,chest tightness,chest tightness,cardiovascular
+S00010,palpitations,palpitations,cardiovascular
+S00011,irregular heartbeat,irregular heartbeat,cardiovascular
+S00012,breathing fast,breathing fast,respiratory
+S00013,hoarse voice,hoarse voice,general
+S00014,sore throat,sore throat,respiratory
+S00015,difficulty speaking,difficulty speaking,general
+S00016,cough,cough,respiratory
+S00017,nasal congestion,nasal congestion,respiratory
+S00018,throat swelling,throat swelling,respiratory
+S00019,diminished hearing,diminished hearing,ENT
+S00020,lump in throat,lump in throat,respiratory
+S00021,throat feels tight,throat feels tight,respiratory
+S00022,difficulty in swallowing,difficulty in swallowing,general
+S00023,skin swelling,skin swelling,dermatological
+S00024,retention of urine,retention of urine,urological
+S00025,groin mass,groin mass,general
+S00026,leg pain,leg pain,musculoskeletal
+S00027,hip pain,hip pain,musculoskeletal
+S00028,suprapubic pain,suprapubic pain,general
+S00029,blood in stool,blood in stool,gastrointestinal
+S00030,lack of growth,lack of growth,general
+S00031,emotional symptoms,emotional symptoms,psychological
+S00032,elbow weakness,elbow weakness,musculoskeletal
+S00033,back weakness,back weakness,musculoskeletal
+S00034,pus in sputum,pus in sputum,respiratory
+S00035,symptoms of the scrotum and testes,symptoms of the scrotum and testes,reproductive
+S00036,swelling of scrotum,swelling of scrotum,reproductive
+S00037,pain in testicles,pain in testicles,reproductive
+S00038,flatulence,flatulence,general
+S00039,pus draining from ear,pus draining from ear,ENT
+S00040,jaundice,jaundice,general
+S00041,mass in scrotum,mass in scrotum,reproductive
+S00042,white discharge from eye,white discharge from eye,visual
+S00043,irritable infant,irritable infant,general
+S00044,abusing alcohol,abusing alcohol,general
+S00045,fainting,fainting,general
+S00046,hostile behavior,hostile behavior,psychological
+S00047,drug abuse,drug abuse,general
+S00048,sharp abdominal pain,sharp abdominal pain,gastrointestinal
+S00049,feeling ill,feeling ill,general
+S00050,vomiting,vomiting,gastrointestinal
+S00051,headache,headache,neurological
+S00052,nausea,nausea,gastrointestinal
+S00053,diarrhea,diarrhea,gastrointestinal
+S00054,vaginal itching,vaginal itching,dermatological
+S00055,vaginal dryness,vaginal dryness,reproductive
+S00056,painful urination,painful urination,urological
+S00057,involuntary urination,involuntary urination,urological
+S00058,pain during intercourse,pain during intercourse,urological
+S00059,frequent urination,frequent urination,urological
+S00060,lower abdominal pain,lower abdominal pain,gastrointestinal
+S00061,vaginal discharge,vaginal discharge,reproductive
+S00062,blood in urine,blood in urine,urological
+S00063,hot flashes,hot flashes,general
+S00064,intermenstrual bleeding,intermenstrual bleeding,reproductive
+S00065,hand or finger pain,hand or finger pain,musculoskeletal
+S00066,wrist pain,wrist pain,musculoskeletal
+S00067,hand or finger swelling,hand or finger swelling,musculoskeletal
+S00068,arm pain,arm pain,musculoskeletal
+S00069,wrist swelling,wrist swelling,musculoskeletal
+S00070,arm stiffness or tightness,arm stiffness or tightness,musculoskeletal
+S00071,arm swelling,arm swelling,musculoskeletal
+S00072,hand or finger stiffness or tightness,hand or finger stiffness or tightness,musculoskeletal
+S00073,wrist stiffness or tightness,wrist stiffness or tightness,musculoskeletal
+S00074,lip swelling,lip swelling,general
+S00075,toothache,toothache,general
+S00076,abnormal appearing skin,abnormal appearing skin,dermatological
+S00077,skin lesion,skin lesion,dermatological
+S00078,acne or pimples,acne or pimples,general
+S00079,dry lips,dry lips,general
+S00080,facial pain,facial pain,general
+S00081,mouth ulcer,mouth ulcer,general
+S00082,skin growth,skin growth,dermatological
+S00083,eye deviation,eye deviation,visual
+S00084,diminished vision,diminished vision,visual
+S00085,double vision,double vision,visual
+S00086,cross-eyed,cross-eyed,visual
+S00087,symptoms of eye,symptoms of eye,visual
+S00088,pain in eye,pain in eye,visual
+S00089,eye moves abnormally,eye moves abnormally,visual
+S00090,abnormal movement of eyelid,abnormal movement of eyelid,visual
+S00091,foreign body sensation in eye,foreign body sensation in eye,visual
+S00092,irregular appearing scalp,irregular appearing scalp,dermatological
+S00093,swollen lymph nodes,swollen lymph nodes,general
+S00094,back pain,back pain,musculoskeletal
+S00095,neck pain,neck pain,musculoskeletal
+S00096,low back pain,low back pain,musculoskeletal
+S00097,pain of the anus,pain of the anus,gastrointestinal
+S00098,pain during pregnancy,pain during pregnancy,urological
+S00099,pelvic pain,pelvic pain,general
+S00100,impotence,impotence,general
+S00101,infant spitting up,infant spitting up,general
+S00102,vomiting blood,vomiting blood,gastrointestinal
+S00103,regurgitation,regurgitation,general
+S00104,burning abdominal pain,burning abdominal pain,gastrointestinal
+S00105,restlessness,restlessness,general
+S00106,symptoms of infants,symptoms of infants,general
+S00107,wheezing,wheezing,respiratory
+S00108,peripheral edema,peripheral edema,general
+S00109,neck mass,neck mass,musculoskeletal
+S00110,ear pain,ear pain,ENT
+S00111,jaw swelling,jaw swelling,general
+S00112,mouth dryness,mouth dryness,general
+S00113,neck swelling,neck swelling,musculoskeletal
+S00114,knee pain,knee pain,musculoskeletal
+S00115,foot or toe pain,foot or toe pain,musculoskeletal
+S00116,bowlegged or knock-kneed,bowlegged or knock-kneed,musculoskeletal
+S00117,ankle pain,ankle pain,musculoskeletal
+S00118,bones are painful,bones are painful,musculoskeletal
+S00119,knee weakness,knee weakness,musculoskeletal
+S00120,elbow pain,elbow pain,musculoskeletal
+S00121,knee swelling,knee swelling,musculoskeletal
+S00122,skin moles,skin moles,dermatological
+S00123,knee lump or mass,knee lump or mass,musculoskeletal
+S00124,weight gain,weight gain,general
+S00125,problems with movement,problems with movement,general
+S00126,knee stiffness or tightness,knee stiffness or tightness,musculoskeletal
+S00127,leg swelling,leg swelling,musculoskeletal
+S00128,foot or toe swelling,foot or toe swelling,musculoskeletal
+S00129,heartburn,heartburn,cardiovascular
+S00130,smoking problems,smoking problems,general
+S00131,muscle pain,muscle pain,musculoskeletal
+S00132,infant feeding problem,infant feeding problem,general
+S00133,recent weight loss,recent weight loss,general
+S00134,problems with shape or size of breast,problems with shape or size of breast,reproductive
+S00135,underweight,underweight,general
+S00136,difficulty eating,difficulty eating,general
+S00137,scanty menstrual flow,scanty menstrual flow,reproductive
+S00138,vaginal pain,vaginal pain,reproductive
+S00139,vaginal redness,vaginal redness,reproductive
+S00140,vulvar irritation,vulvar irritation,reproductive
+S00141,weakness,weakness,general
+S00142,decreased heart rate,decreased heart rate,cardiovascular
+S00143,increased heart rate,increased heart rate,cardiovascular
+S00144,bleeding or discharge from nipple,bleeding or discharge from nipple,general
+S00145,ringing in ear,ringing in ear,ENT
+S00146,plugged feeling in ear,plugged feeling in ear,ENT
+S00147,itchy ear(s),itchy ear(s),dermatological
+S00148,frontal headache,frontal headache,neurological
+S00149,fluid in ear,fluid in ear,ENT
+S00150,neck stiffness or tightness,neck stiffness or tightness,musculoskeletal
+S00151,spots or clouds in vision,spots or clouds in vision,visual
+S00152,eye redness,eye redness,visual
+S00153,lacrimation,lacrimation,general
+S00154,itchiness of eye,itchiness of eye,dermatological
+S00155,blindness,blindness,visual
+S00156,eye burns or stings,eye burns or stings,visual
+S00157,itchy eyelid,itchy eyelid,dermatological
+S00158,feeling cold,feeling cold,general
+S00159,decreased appetite,decreased appetite,general
+S00160,excessive appetite,excessive appetite,general
+S00161,excessive anger,excessive anger,general
+S00162,loss of sensation,loss of sensation,general
+S00163,focal weakness,focal weakness,general
+S00164,slurring words,slurring words,general
+S00165,symptoms of the face,symptoms of the face,general
+S00166,disturbance of memory,disturbance of memory,neurological
+S00167,paresthesia,paresthesia,general
+S00168,side pain,side pain,general
+S00169,fever,fever,general
+S00170,shoulder pain,shoulder pain,musculoskeletal
+S00171,shoulder stiffness or tightness,shoulder stiffness or tightness,musculoskeletal
+S00172,shoulder weakness,shoulder weakness,musculoskeletal
+S00173,arm cramps or spasms,arm cramps or spasms,musculoskeletal
+S00174,shoulder swelling,shoulder swelling,musculoskeletal
+S00175,tongue lesions,tongue lesions,dermatological
+S00176,leg cramps or spasms,leg cramps or spasms,musculoskeletal
+S00177,abnormal appearing tongue,abnormal appearing tongue,ENT
+S00178,ache all over,ache all over,general
+S00179,lower body pain,lower body pain,general
+S00180,problems during pregnancy,problems during pregnancy,urological
+S00181,spotting or bleeding during pregnancy,spotting or bleeding during pregnancy,urological
+S00182,cramps and spasms,cramps and spasms,general
+S00183,upper abdominal pain,upper abdominal pain,gastrointestinal
+S00184,stomach bloating,stomach bloating,gastrointestinal
+S00185,changes in stool appearance,changes in stool appearance,gastrointestinal
+S00186,unusual color or odor to urine,unusual color or odor to urine,urological
+S00187,kidney mass,kidney mass,urological
+S00188,swollen abdomen,swollen abdomen,general
+S00189,symptoms of prostate,symptoms of prostate,urological
+S00190,leg stiffness or tightness,leg stiffness or tightness,musculoskeletal
+S00191,difficulty breathing,difficulty breathing,respiratory
+S00192,rib pain,rib pain,general
+S00193,joint pain,joint pain,musculoskeletal
+S00194,muscle stiffness or tightness,muscle stiffness or tightness,musculoskeletal
+S00195,pallor,pallor,general
+S00196,hand or finger lump or mass,hand or finger lump or mass,musculoskeletal
+S00197,chills,chills,general
+S00198,groin pain,groin pain,general
+S00199,fatigue,fatigue,general
+S00200,abdominal distention,abdominal distention,gastrointestinal
+S00201,regurgitation.1,regurgitation.1,general
+S00202,symptoms of the kidneys,symptoms of the kidneys,urological
+S00203,melena,melena,general
+S00204,flushing,flushing,general
+S00205,coughing up sputum,coughing up sputum,respiratory
+S00206,seizures,seizures,neurological
+S00207,delusions or hallucinations,delusions or hallucinations,general
+S00208,shoulder cramps or spasms,shoulder cramps or spasms,musculoskeletal
+S00209,joint stiffness or tightness,joint stiffness or tightness,musculoskeletal
+S00210,pain or soreness of breast,pain or soreness of breast,reproductive
+S00211,excessive urination at night,excessive urination at night,urological
+S00212,bleeding from eye,bleeding from eye,visual
+S00213,rectal bleeding,rectal bleeding,gastrointestinal
+S00214,constipation,constipation,gastrointestinal
+S00215,temper problems,temper problems,general
+S00216,coryza,coryza,general
+S00217,wrist weakness,wrist weakness,musculoskeletal
+S00218,eye strain,eye strain,visual
+S00219,hemoptysis,hemoptysis,general
+S00220,lymphedema,lymphedema,general
+S00221,skin on leg or foot looks infected,skin on leg or foot looks infected,musculoskeletal
+S00222,allergic reaction,allergic reaction,general
+S00223,congestion in chest,congestion in chest,cardiovascular
+S00224,muscle swelling,muscle swelling,musculoskeletal
+S00225,pus in urine,pus in urine,urological
+S00226,abnormal size or shape of ear,abnormal size or shape of ear,ENT
+S00227,low back weakness,low back weakness,musculoskeletal
+S00228,sleepiness,sleepiness,psychological
+S00229,apnea,apnea,general
+S00230,abnormal breathing sounds,abnormal breathing sounds,respiratory
+S00231,excessive growth,excessive growth,general
+S00232,elbow cramps or spasms,elbow cramps or spasms,musculoskeletal
+S00233,feeling hot and cold,feeling hot and cold,general
+S00234,blood clots during menstrual periods,blood clots during menstrual periods,urological
+S00235,absence of menstruation,absence of menstruation,general
+S00236,pulling at ears,pulling at ears,ENT
+S00237,gum pain,gum pain,general
+S00238,redness in ear,redness in ear,ENT
+S00239,fluid retention,fluid retention,general
+S00240,flu-like syndrome,flu-like syndrome,general
+S00241,sinus congestion,sinus congestion,respiratory
+S00242,painful sinuses,painful sinuses,respiratory
+S00243,fears and phobias,fears and phobias,psychological
+S00244,recent pregnancy,recent pregnancy,reproductive
+S00245,uterine contractions,uterine contractions,reproductive
+S00246,burning chest pain,burning chest pain,cardiovascular
+S00247,back cramps or spasms,back cramps or spasms,musculoskeletal
+S00248,stiffness all over,stiffness all over,general
+S00249,"muscle cramps, contractures, or spasms","muscle cramps, contractures, or spasms",musculoskeletal
+S00250,low back cramps or spasms,low back cramps or spasms,musculoskeletal
+S00251,back mass or lump,back mass or lump,musculoskeletal
+S00252,nosebleed,nosebleed,respiratory
+S00253,long menstrual periods,long menstrual periods,reproductive
+S00254,heavy menstrual flow,heavy menstrual flow,reproductive
+S00255,unpredictable menstruation,unpredictable menstruation,general
+S00256,painful menstruation,painful menstruation,general
+S00257,infertility,infertility,general
+S00258,frequent menstruation,frequent menstruation,general
+S00259,sweating,sweating,general
+S00260,mass on eyelid,mass on eyelid,visual
+S00261,swollen eye,swollen eye,visual
+S00262,eyelid swelling,eyelid swelling,visual
+S00263,eyelid lesion or rash,eyelid lesion or rash,dermatological
+S00264,unwanted hair,unwanted hair,dermatological
+S00265,symptoms of bladder,symptoms of bladder,urological
+S00266,irregular appearing nails,irregular appearing nails,dermatological
+S00267,itching of skin,itching of skin,dermatological
+S00268,hurts to breath,hurts to breath,respiratory
+S00269,nailbiting,nailbiting,dermatological
+S00270,"skin dryness, peeling, scaliness, or roughness","skin dryness, peeling, scaliness, or roughness",dermatological
+S00271,skin on arm or hand looks infected,skin on arm or hand looks infected,musculoskeletal
+S00272,skin irritation,skin irritation,dermatological
+S00273,itchy scalp,itchy scalp,dermatological
+S00274,hip swelling,hip swelling,musculoskeletal
+S00275,incontinence of stool,incontinence of stool,gastrointestinal
+S00276,foot or toe cramps or spasms,foot or toe cramps or spasms,musculoskeletal
+S00277,warts,warts,dermatological
+S00278,bumps on penis,bumps on penis,reproductive
+S00279,too little hair,too little hair,dermatological
+S00280,foot or toe lump or mass,foot or toe lump or mass,musculoskeletal
+S00281,skin rash,skin rash,dermatological
+S00282,mass or swelling around the anus,mass or swelling around the anus,gastrointestinal
+S00283,low back swelling,low back swelling,musculoskeletal
+S00284,ankle swelling,ankle swelling,musculoskeletal
+S00285,hip lump or mass,hip lump or mass,musculoskeletal
+S00286,drainage in throat,drainage in throat,respiratory
+S00287,dry or flaky scalp,dry or flaky scalp,dermatological
+S00288,premenstrual tension or irritability,premenstrual tension or irritability,reproductive
+S00289,feeling hot,feeling hot,general
+S00290,feet turned in,feet turned in,general
+S00291,foot or toe stiffness or tightness,foot or toe stiffness or tightness,musculoskeletal
+S00292,pelvic pressure,pelvic pressure,general
+S00293,elbow swelling,elbow swelling,musculoskeletal
+S00294,elbow stiffness or tightness,elbow stiffness or tightness,musculoskeletal
+S00295,early or late onset of menopause,early or late onset of menopause,ENT
+S00296,mass on ear,mass on ear,ENT
+S00297,bleeding from ear,bleeding from ear,ENT
+S00298,hand or finger weakness,hand or finger weakness,musculoskeletal
+S00299,low self-esteem,low self-esteem,general
+S00300,throat irritation,throat irritation,respiratory
+S00301,itching of the anus,itching of the anus,gastrointestinal
+S00302,swollen or red tonsils,swollen or red tonsils,general
+S00303,irregular belly button,irregular belly button,general
+S00304,swollen tongue,swollen tongue,general
+S00305,lip sore,lip sore,general
+S00306,vulvar sore,vulvar sore,reproductive
+S00307,hip stiffness or tightness,hip stiffness or tightness,musculoskeletal
+S00308,mouth pain,mouth pain,general
+S00309,arm weakness,arm weakness,musculoskeletal
+S00310,leg lump or mass,leg lump or mass,musculoskeletal
+S00311,disturbance of smell or taste,disturbance of smell or taste,general
+S00312,discharge in stools,discharge in stools,gastrointestinal
+S00313,penis pain,penis pain,reproductive
+S00314,loss of sex drive,loss of sex drive,general
+S00315,obsessions and compulsions,obsessions and compulsions,general
+S00316,antisocial behavior,antisocial behavior,psychological
+S00317,neck cramps or spasms,neck cramps or spasms,musculoskeletal
+S00318,pupils unequal,pupils unequal,visual
+S00319,poor circulation,poor circulation,cardiovascular
+S00320,thirst,thirst,general
+S00321,sleepwalking,sleepwalking,psychological
+S00322,skin oiliness,skin oiliness,dermatological
+S00323,sneezing,sneezing,general
+S00324,bladder mass,bladder mass,urological
+S00325,knee cramps or spasms,knee cramps or spasms,musculoskeletal
+S00326,premature ejaculation,premature ejaculation,general
+S00327,leg weakness,leg weakness,musculoskeletal
+S00328,posture problems,posture problems,general
+S00329,bleeding in mouth,bleeding in mouth,general
+S00330,tongue bleeding,tongue bleeding,general
+S00331,change in skin mole size or color,change in skin mole size or color,dermatological
+S00332,penis redness,penis redness,reproductive
+S00333,penile discharge,penile discharge,general
+S00334,shoulder lump or mass,shoulder lump or mass,musculoskeletal
+S00335,polyuria,polyuria,general
+S00336,cloudy eye,cloudy eye,visual
+S00337,hysterical behavior,hysterical behavior,psychological
+S00338,arm lump or mass,arm lump or mass,musculoskeletal
+S00339,nightmares,nightmares,general
+S00340,bleeding gums,bleeding gums,general
+S00341,pain in gums,pain in gums,general
+S00342,bedwetting,bedwetting,general
+S00343,diaper rash,diaper rash,dermatological
+S00344,lump or mass of breast,lump or mass of breast,reproductive
+S00345,vaginal bleeding after menopause,vaginal bleeding after menopause,reproductive
+S00346,infrequent menstruation,infrequent menstruation,general
+S00347,mass on vulva,mass on vulva,reproductive
+S00348,jaw pain,jaw pain,general
+S00349,itching of scrotum,itching of scrotum,dermatological
+S00350,postpartum problems of the breast,postpartum problems of the breast,reproductive
+S00351,eyelid retracted,eyelid retracted,visual
+S00352,hesitancy,hesitancy,general
+S00353,elbow lump or mass,elbow lump or mass,musculoskeletal
+S00354,muscle weakness,muscle weakness,musculoskeletal
+S00355,throat redness,throat redness,respiratory
+S00356,joint swelling,joint swelling,musculoskeletal
+S00357,tongue pain,tongue pain,general
+S00358,redness in or around nose,redness in or around nose,respiratory
+S00359,wrinkles on skin,wrinkles on skin,dermatological
+S00360,foot or toe weakness,foot or toe weakness,musculoskeletal
+S00361,hand or finger cramps or spasms,hand or finger cramps or spasms,musculoskeletal
+S00362,back stiffness or tightness,back stiffness or tightness,musculoskeletal
+S00363,wrist lump or mass,wrist lump or mass,musculoskeletal
+S00364,skin pain,skin pain,dermatological
+S00365,low back stiffness or tightness,low back stiffness or tightness,musculoskeletal
+S00366,low urine output,low urine output,urological
+S00367,skin on head or neck looks infected,skin on head or neck looks infected,neurological
+S00368,stuttering or stammering,stuttering or stammering,general
+S00369,problems with orgasm,problems with orgasm,general
+S00370,nose deformity,nose deformity,respiratory
+S00371,lump over jaw,lump over jaw,general
+S00372,sore in nose,sore in nose,respiratory
+S00373,hip weakness,hip weakness,musculoskeletal
+S00374,back swelling,back swelling,musculoskeletal
+S00375,ankle stiffness or tightness,ankle stiffness or tightness,musculoskeletal
+S00376,ankle weakness,ankle weakness,musculoskeletal
+S00377,neck weakness,neck weakness,musculoskeletal

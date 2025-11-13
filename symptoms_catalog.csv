@@ -1,0 +1,31 @@
+code,name,aliases,category
+S00001,chest pain,"chest tightness|chest discomfort|chest pressure",cardiovascular
+S00002,shortness of breath,"difficulty breathing|hard to breathe|can't catch breath|breathlessness",respiratory
+S00003,cough,"persistent cough|dry cough|wet cough|coughing",respiratory
+S00004,fever,"high temperature|febrile|elevated temperature",general
+S00005,headache,"head pain|migraine|tension headache",neurological
+S00006,nausea,"feeling sick|queasy|upset stomach",gastrointestinal
+S00007,vomiting,"throwing up|being sick|emesis",gastrointestinal
+S00008,diarrhea,"loose stools|frequent bowel movements|watery stools",gastrointestinal
+S00009,abdominal pain,"stomach pain|belly pain|stomach ache|tummy pain",gastrointestinal
+S00010,fatigue,"tiredness|exhaustion|feeling tired|lack of energy",general
+S00011,dizziness,"lightheadedness|vertigo|feeling faint",neurological
+S00012,sore throat,"throat pain|painful swallowing",respiratory
+S00013,runny nose,"nasal discharge|rhinorrhea|stuffy nose",respiratory
+S00014,muscle pain,"myalgia|body aches|muscle aches",musculoskeletal
+S00015,joint pain,"arthralgia|joint aches",musculoskeletal
+S00016,back pain,"lower back pain|upper back pain|backache",musculoskeletal
+S00017,rash,"skin rash|red spots|skin irritation",dermatological
+S00018,itching,"pruritus|itchy skin",dermatological
+S00019,swelling,"edema|puffiness|inflammation",general
+S00020,palpitations,"irregular heartbeat|heart racing|rapid heartbeat",cardiovascular
+S00021,confusion,"disorientation|mental fog|cognitive impairment",neurological
+S00022,anxiety,"nervousness|worry|feeling anxious",psychological
+S00023,insomnia,"difficulty sleeping|can't sleep|sleep problems",general
+S00024,weight loss,"losing weight|unintentional weight loss",general
+S00025,weight gain,"gaining weight|increased weight",general
+S00026,loss of appetite,"not hungry|decreased appetite",gastrointestinal
+S00027,excessive thirst,"polydipsia|very thirsty",general
+S00028,frequent urination,"polyuria|urinating often",urological
+S00029,blurred vision,"vision problems|can't see clearly",visual
+S00030,numbness,"loss of sensation|tingling|pins and needles",neurological
