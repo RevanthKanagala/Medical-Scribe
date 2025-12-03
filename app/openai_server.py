@@ -11,7 +11,8 @@ import json
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
-load_dotenv()
+# Force reload environment variables to get latest values
+load_dotenv(override=True)
 
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
@@ -37,6 +38,12 @@ ASSEMBLYAI_KEY = os.getenv('ASSEMBLYAI_API_KEY', '7b1e682337af4c67afe4e8edfb0985
 OPENAI_KEY = os.getenv('OPENAI_API_KEY')
 UPLOAD_DIR = Path(os.getenv('UPLOAD_DIR', 'uploads'))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+# Privacy settings
+MASK_NAMES_IN_TRANSCRIPT = os.getenv('MASK_NAMES', 'true').lower() == 'true'
+
+# Debug: Log API key status at startup
+print(f"[STARTUP] OpenAI API Key loaded: {OPENAI_KEY[:10] if OPENAI_KEY else 'NOT FOUND'}...{OPENAI_KEY[-4:] if OPENAI_KEY else ''}")
 
 app = FastAPI(title='Medical Scribe - AIMS')
 static_dir = Path('web/static')
@@ -86,7 +93,31 @@ def convert_webm_to_wav(webm_path, wav_path):
         raise RuntimeError(f'ffmpeg conversion failed: {e}')
 
 # Transcribe using AssemblyAI
-def transcribe_with_assemblyai(path: str) -> str:
+def mask_patient_info(patient_name: str, uhid: str) -> tuple:
+    """Mask patient information for privacy.
+    
+    Args:
+        patient_name: Full patient name
+        uhid: Unique Health ID
+        
+    Returns:
+        Tuple of (masked_name, masked_uhid)
+        - Name is completely masked with asterisks
+        - UHID shows only last 4 digits (e.g., ****1234)
+    """
+    # Mask name completely
+    masked_name = '*' * len(patient_name.replace(' ', ''))
+    
+    # Mask UHID - show only last 4 digits
+    if len(uhid) > 4:
+        masked_uhid = '*' * (len(uhid) - 4) + uhid[-4:]
+    else:
+        masked_uhid = uhid  # If UHID is 4 or fewer chars, show as is
+    
+    return masked_name, masked_uhid
+
+
+def transcribe_with_assemblyai(path: str, mask_names: bool = True) -> str:
     import assemblyai as aai
     if not ASSEMBLYAI_KEY:
         raise RuntimeError('ASSEMBLYAI_API_KEY not set')
@@ -95,7 +126,9 @@ def transcribe_with_assemblyai(path: str) -> str:
     transcript = transcriber.transcribe(path)
     if getattr(transcript, 'error', None):
         raise RuntimeError(transcript.error)
-    return transcript.text
+    
+    text = transcript.text
+    return text
 
 
 def generate_medical_summary(
@@ -158,7 +191,9 @@ def generate_medical_summary(
 Extract ONLY what is mentioned. Use null for missing information."""
 
     def _call_openai(messages):
+        print(f"[DEBUG] Calling OpenAI with mode: {mode}")
         if mode == 'modern':
+            print(f"[DEBUG] Using modern OpenAI client")
             resp = client.chat.completions.create(
                 model='gpt-3.5-turbo',
                 messages=messages,
@@ -167,6 +202,7 @@ Extract ONLY what is mentioned. Use null for missing information."""
             )
             return resp.choices[0].message.content
         else:
+            print(f"[DEBUG] Using legacy OpenAI client")
             import openai as _openai
             resp = _openai.ChatCompletion.create(
                 model='gpt-3.5-turbo',
@@ -177,10 +213,12 @@ Extract ONLY what is mentioned. Use null for missing information."""
             return resp['choices'][0]['message']['content']
     
     try:
+        print(f"[DEBUG] Starting OpenAI call for medical summary...")
         raw = _call_openai([
             {"role": "system", "content": "You are a medical documentation expert. Extract only factual information."},
             {"role": "user", "content": prompt},
         ])
+        print(f"[DEBUG] OpenAI call successful, response length: {len(raw) if raw else 0}")
         
         # Parse JSON response
         content = raw.strip()
@@ -205,11 +243,22 @@ Extract ONLY what is mentioned. Use null for missing information."""
             report.append(f"  Patient Type: {doctor_info.get('patientType', 'N/A')}")
             report.append("")
         
-        # Patient Information
+        # Patient Information (with privacy masking)
         if patient_info:
-            report.append("PATIENT INFORMATION:")
-            report.append(f"  Name: {patient_info.get('name', 'N/A')}")
-            report.append(f"  UHID: {patient_info.get('uhid', 'N/A')}")
+            patient_name = patient_info.get('name', 'N/A')
+            patient_uhid = patient_info.get('uhid', 'N/A')
+            
+            # Apply masking if enabled
+            if MASK_NAMES_IN_TRANSCRIPT and patient_name != 'N/A' and patient_uhid != 'N/A':
+                masked_name, masked_uhid = mask_patient_info(patient_name, patient_uhid)
+                report.append("PATIENT INFORMATION:")
+                report.append(f"  Name: {masked_name} (masked for privacy)")
+                report.append(f"  UHID: {masked_uhid}")
+            else:
+                report.append("PATIENT INFORMATION:")
+                report.append(f"  Name: {patient_name}")
+                report.append(f"  UHID: {patient_uhid}")
+            
             report.append(f"  Sex: {patient_info.get('sex', 'N/A')}")
             report.append(f"  Age: {patient_info.get('age', 'N/A')} years")
             report.append(f"  Date of Birth: {patient_info.get('dob', 'N/A')}")
@@ -289,7 +338,10 @@ Extract ONLY what is mentioned. Use null for missing information."""
         return "\n".join(report)
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         print(f"[ERROR] Failed to generate medical summary: {e}")
+        print(f"[ERROR] Full traceback:\n{error_details}")
         # Fallback to basic summary
         return f"""
 MEDICAL SUMMARY
@@ -301,6 +353,7 @@ TRANSCRIPT:
 {transcript}
 
 Note: Automated summary generation failed. Manual review required.
+Error: {str(e)}
 """
 
 
@@ -476,7 +529,7 @@ async def upload_audio(file: UploadFile = File(...)):
             try:
                 convert_webm_to_wav(save_path, wav_path)
                 print(f"[DEBUG] Conversion successful, transcribing {wav_path}...")
-                text = await run_in_threadpool(transcribe_with_assemblyai, str(wav_path))
+                text = await run_in_threadpool(transcribe_with_assemblyai, str(wav_path), MASK_NAMES_IN_TRANSCRIPT)
                 # Clean up wav file after transcription
                 if wav_path.exists():
                     os.remove(wav_path)
@@ -485,7 +538,7 @@ async def upload_audio(file: UploadFile = File(...)):
                 raise
         else:
             print(f"[DEBUG] Transcribing {save_path} directly...")
-            text = await run_in_threadpool(transcribe_with_assemblyai, str(save_path))
+            text = await run_in_threadpool(transcribe_with_assemblyai, str(save_path), MASK_NAMES_IN_TRANSCRIPT)
         
         print(f"[DEBUG] Transcription successful! Text length: {len(text)} chars")
         print(f"[DEBUG] First 100 chars: {text[:100]}...")

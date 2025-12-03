@@ -547,13 +547,19 @@
         month: 'short', 
         year: 'numeric' 
       });
-      document.getElementById('liveTime').textContent = `${dateStr} • ${timeStr}`;
+      const headerTimeElement = document.getElementById('headerTime');
+      if (headerTimeElement) {
+        headerTimeElement.textContent = `${dateStr} • ${timeStr}`;
+      }
     }
 
     // Auto-update visit date/time and header clock
     setInterval(() => {
       const now = new Date();
-      document.getElementById('visitDateTime').value = now.toLocaleString('en-IN');
+      const visitField = document.getElementById('visitDateTime');
+      if (visitField) {
+        visitField.value = now.toLocaleString('en-IN');
+      }
       updateHeaderTime();
     }, 1000);
 
