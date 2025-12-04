@@ -10,11 +10,12 @@ import os
 import json
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 from dotenv import load_dotenv
 # Force reload environment variables to get latest values
 load_dotenv(override=True)
 
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, Depends
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
@@ -23,7 +24,11 @@ import tempfile
 import subprocess
 import time
 from uuid import uuid4
-import json
+import threading
+import requests
+from sqlalchemy.orm import Session
+
+from app.database import get_db, Doctor, Patient, Consultation
 
 # Import symptom extraction pipeline
 from app.symptom_pipeline import (
@@ -32,12 +37,18 @@ from app.symptom_pipeline import (
     symptom_catalog
 )
 
-
 # AssemblyAI API key - try from environment or use hardcoded key
 ASSEMBLYAI_KEY = os.getenv('ASSEMBLYAI_API_KEY', '7b1e682337af4c67afe4e8edfb0985b3')
 OPENAI_KEY = os.getenv('OPENAI_API_KEY')
 UPLOAD_DIR = Path(os.getenv('UPLOAD_DIR', 'uploads'))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+# Server + tunnel configuration
+SERVER_PORT = int(os.getenv('SERVER_PORT', '8000'))
+ENABLE_NGROK = os.getenv('ENABLE_NGROK', 'false').lower() == 'true'
+NGROK_PATH = os.getenv('NGROK_PATH', 'ngrok')
+_ngrok_process = None
+NGROK_URL = None
 
 # Privacy settings
 MASK_NAMES_IN_TRANSCRIPT = os.getenv('MASK_NAMES', 'true').lower() == 'true'
@@ -485,15 +496,142 @@ def index():
     return {'status': 'OpenAI transcription server', 'upload_dir': str(UPLOAD_DIR)}
 
 # Print server IP/URL on startup
-import threading
+# Updated to include the correct server URL with port
+
 def print_server_url():
     try:
         hostname = socket.gethostname()
         ip = socket.gethostbyname(hostname)
-        print(f"\nServer running! Access the web UI at: http://{ip}:8000/static/index.html\n")
+        print(f"\nServer running! Access the web UI at: http://{ip}:{SERVER_PORT}/static/index.html\n")
+        return f"http://{ip}:{SERVER_PORT}/static/index.html"
     except Exception:
-        print("\nServer running! Access the web UI at: http://localhost:8000/static/index.html\n")
+        print(f"\nServer running! Access the web UI at: http://localhost:{SERVER_PORT}/static/index.html\n")
+        return f"http://localhost:{SERVER_PORT}/static/index.html"
+
+# Start the thread to print the server URL
+server_url = print_server_url()
 threading.Thread(target=print_server_url, daemon=True).start()
+
+
+def _fetch_existing_ngrok_url():
+    try:
+        resp = requests.get('http://127.0.0.1:4040/api/tunnels', timeout=2)
+        tunnels = resp.json().get('tunnels', [])
+        for tunnel in tunnels:
+            if tunnel.get('proto') == 'https':
+                return tunnel.get('public_url')
+    except Exception as exc:
+        print(f"[NGROK] Unable to query existing tunnel: {exc}")
+    return None
+
+
+def start_ngrok_tunnel(port: int = SERVER_PORT):
+    """Start ngrok automatically and log the public URL."""
+    global _ngrok_process, NGROK_URL
+    if not ENABLE_NGROK:
+        return
+
+    if NGROK_URL:
+        return
+
+    # Re-use active tunnel if one exists
+    existing_url = _fetch_existing_ngrok_url()
+    if existing_url:
+        NGROK_URL = existing_url
+        print(f"[NGROK] Existing public URL: {NGROK_URL}")
+        return
+
+    try:
+        _ngrok_process = subprocess.Popen(
+            [NGROK_PATH, 'http', str(port)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        print(f"[NGROK] Executable '{NGROK_PATH}' not found. Set NGROK_PATH env var.")
+        return
+    except Exception as exc:
+        print(f"[NGROK] Failed to launch ngrok: {exc}")
+        return
+
+    # Poll the local API for a public URL
+    for _ in range(20):
+        time.sleep(1)
+        url = _fetch_existing_ngrok_url()
+        if url:
+            NGROK_URL = url
+            print(f"[NGROK] Tunnel established: {NGROK_URL}")
+            print(f"[NGROK] Web UI: {NGROK_URL}/static/index.html")
+            return
+
+    print("[NGROK] Timed out waiting for public URL. Check ngrok logs.")
+
+
+if ENABLE_NGROK:
+    threading.Thread(target=start_ngrok_tunnel, daemon=True).start()
+
+
+def _parse_visit_datetime(value: Optional[str]) -> datetime:
+    if not value:
+        return datetime.utcnow()
+    known_formats = [
+        "%d/%m/%Y, %I:%M:%S %p",
+        "%d-%m-%Y %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+        "%d-%b-%Y, %I:%M:%S %p",
+    ]
+    for fmt in known_formats:
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(value)
+    except Exception:
+        return datetime.utcnow()
+
+
+def _get_or_create_doctor(db: Session, doctor_data: dict) -> Optional[Doctor]:
+    if not doctor_data or not doctor_data.get('name'):
+        return None
+    query = db.query(Doctor).filter(
+        Doctor.name == doctor_data.get('name'),
+        Doctor.department == doctor_data.get('department'),
+        Doctor.designation == doctor_data.get('designation'),
+        Doctor.patient_type == doctor_data.get('patientType')
+    )
+    doctor = query.first()
+    if doctor:
+        return doctor
+    doctor = Doctor(
+        name=doctor_data.get('name'),
+        department=doctor_data.get('department'),
+        designation=doctor_data.get('designation'),
+        patient_type=doctor_data.get('patientType')
+    )
+    db.add(doctor)
+    db.commit()
+    db.refresh(doctor)
+    return doctor
+
+
+def _create_or_update_patient(db: Session, patient_data: dict) -> Optional[Patient]:
+    if not patient_data or not patient_data.get('uhid'):
+        return None
+    patient = db.query(Patient).filter(Patient.uhid == patient_data['uhid']).first()
+    if not patient:
+        patient = Patient(uhid=patient_data['uhid'])
+        db.add(patient)
+    patient.name = patient_data.get('name', patient.name)
+    patient.sex = patient_data.get('sex', patient.sex)
+    patient.age = patient_data.get('age', patient.age)
+    patient.dob = patient_data.get('dob', patient.dob)
+    patient.phone = patient_data.get('phone', patient.phone)
+    patient.email = patient_data.get('email', patient.email)
+    patient.address = patient_data.get('address', patient.address)
+    db.commit()
+    db.refresh(patient)
+    return patient
 
 
 
@@ -588,7 +726,9 @@ async def extract_symptoms_endpoint(transcript: str = Form(...)):
 async def summarize_endpoint(
     transcript: str = Form(...),
     doctor_info: str = Form(None),
-    patient_info: str = Form(None)
+    patient_info: str = Form(None),
+    audio_path: str = Form(None),
+    db: Session = Depends(get_db)
 ):
     """Generate comprehensive medical summary with doctor and patient information."""
     global last_summary, last_symptom_extraction
@@ -626,13 +766,42 @@ async def summarize_endpoint(
         
         print(f"[DEBUG] Summary generated successfully! Length: {len(summary)} chars")
         
+        # Step 3: Persist consultation data
+        consultation_id = None
+        try:
+            doctor = _get_or_create_doctor(db, doctor_data)
+            patient = _create_or_update_patient(db, patient_data)
+            if doctor and patient:
+                consultation = Consultation(
+                    doctor_id=doctor.id,
+                    patient_id=patient.id,
+                    visit_datetime=_parse_visit_datetime(patient_data.get('visitDateTime')),
+                    transcript_text=transcript,
+                    transcript_length=len(transcript),
+                    summary_text=summary,
+                    symptoms_present=symptom_result['symptoms_present'],
+                    symptom_count=symptom_result['symptom_count'],
+                    unknown_mentions=symptom_result['unknown_mentions'],
+                    audio_path=audio_path
+                )
+                db.add(consultation)
+                db.commit()
+                db.refresh(consultation)
+                consultation_id = consultation.id
+        except Exception as db_error:
+            db.rollback()
+            print(f"[DB] Failed to persist consultation: {db_error}")
+
         # Return summary + symptom data
-        return {
+        response = {
             'summary': summary,
             'symptoms_present': symptom_result['symptoms_present'],
             'unknown_mentions': symptom_result['unknown_mentions'],
-            'symptom_count': symptom_result['symptom_count']
+            'symptom_count': symptom_result['symptom_count'],
+            'consultation_id': consultation_id
         }
+        
+        return response
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
@@ -657,6 +826,147 @@ def get_unknown_symptoms():
     return {
         'unknown_mentions': last_symptom_extraction.get('unknown_mentions', []),
         'count': last_symptom_extraction.get('unknown_count', 0)
+    }
+
+
+# ==================== Database CRUD Endpoints ====================
+
+@app.post('/doctors')
+def create_or_get_doctor(
+    name: str = Form(...),
+    department: str = Form(...),
+    designation: str = Form(...),
+    patient_type: str = Form(None),
+    db: Session = Depends(get_db)
+):
+    """Create or retrieve a doctor by their details."""
+    try:
+        doctor = _get_or_create_doctor(db, {
+            'name': name,
+            'department': department,
+            'designation': designation,
+            'patientType': patient_type
+        })
+        return {
+            'status': 'created' if doctor else 'error',
+            'doctor': {
+                'id': doctor.id,
+                'name': doctor.name,
+                'department': doctor.department,
+                'designation': doctor.designation,
+                'patient_type': doctor.patient_type
+            }
+        }
+    except Exception as e:
+        db.rollback()
+        return JSONResponse({'error': f'Doctor creation failed: {e}'}, status_code=500)
+
+
+@app.post('/patients')
+def create_or_update_patient(
+    uhid: str = Form(...),
+    name: str = Form(...),
+    sex: str = Form(...),
+    age: str = Form(...),
+    dob: str = Form(...),
+    phone: str = Form(None),
+    email: str = Form(None),
+    address: str = Form(None),
+    db: Session = Depends(get_db)
+):
+    """Create new patient or update existing patient by UHID."""
+    try:
+        patient = _create_or_update_patient(db, {
+            'uhid': uhid,
+            'name': name,
+            'sex': sex,
+            'age': age,
+            'dob': dob,
+            'phone': phone,
+            'email': email,
+            'address': address
+        })
+        return {
+            'status': 'success',
+            'patient': {
+                'id': patient.id,
+                'uhid': patient.uhid,
+                'name': patient.name
+            }
+        }
+    except Exception as e:
+        db.rollback()
+        return JSONResponse({'error': f'Patient save failed: {e}'}, status_code=500)
+
+
+@app.get('/patients/{uhid}')
+def get_patient_by_uhid(uhid: str, db: Session = Depends(get_db)):
+    """Get patient details and consultation history by UHID."""
+    patient = db.query(Patient).filter(Patient.uhid == uhid).first()
+    if not patient:
+        return JSONResponse({'error': 'Patient not found'}, status_code=404)
+
+    consultations = (
+        db.query(Consultation)
+        .filter(Consultation.patient_id == patient.id)
+        .order_by(Consultation.visit_datetime.desc())
+        .all()
+    )
+    history = []
+    for c in consultations:
+        history.append({
+            'id': c.id,
+            'visit_datetime': c.visit_datetime.isoformat() if c.visit_datetime else None,
+            'doctor_name': c.doctor.name if c.doctor else None,
+            'doctor_department': c.doctor.department if c.doctor else None,
+            'symptom_count': c.symptom_count,
+            'summary': c.summary_text[:250] + '...' if c.summary_text and len(c.summary_text) > 250 else c.summary_text
+        })
+
+    return {
+        'patient': {
+            'id': patient.id,
+            'name': patient.name,
+            'uhid': patient.uhid,
+            'sex': patient.sex,
+            'age': patient.age,
+            'dob': patient.dob,
+            'phone': patient.phone,
+            'email': patient.email,
+            'address': patient.address,
+        },
+        'total_consultations': len(history),
+        'consultations': history
+    }
+
+
+@app.get('/consultations/{consultation_id}')
+def get_consultation(consultation_id: int, db: Session = Depends(get_db)):
+    """Get full consultation details including transcript and summary."""
+    consultation = db.query(Consultation).filter(Consultation.id == consultation_id).first()
+    if not consultation:
+        return JSONResponse({'error': 'Consultation not found'}, status_code=404)
+
+    return {
+        'id': consultation.id,
+        'visit_datetime': consultation.visit_datetime.isoformat() if consultation.visit_datetime else None,
+        'doctor': {
+            'id': consultation.doctor.id if consultation.doctor else None,
+            'name': consultation.doctor.name if consultation.doctor else None,
+            'department': consultation.doctor.department if consultation.doctor else None,
+            'designation': consultation.doctor.designation if consultation.doctor else None,
+        },
+        'patient': {
+            'id': consultation.patient.id if consultation.patient else None,
+            'name': consultation.patient.name if consultation.patient else None,
+            'uhid': consultation.patient.uhid if consultation.patient else None,
+        },
+        'transcript': consultation.transcript_text,
+        'summary': consultation.summary_text,
+        'symptom_count': consultation.symptom_count,
+        'symptoms_present': consultation.symptoms_present,
+        'unknown_mentions': consultation.unknown_mentions,
+        'audio_path': consultation.audio_path
     }
 
 

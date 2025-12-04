@@ -61,7 +61,11 @@ class Patient(Base):
     sex = Column(String(32), nullable=True)
     age = Column(String(8), nullable=True)  # store as string to avoid parsing issues
     dob = Column(String(32), nullable=True)
+    phone = Column(String(20), nullable=True)
+    email = Column(String(100), nullable=True)
+    address = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     consultations = relationship('Consultation', back_populates='patient')
 
@@ -71,10 +75,13 @@ class Consultation(Base):
     id = Column(Integer, primary_key=True, index=True)
     doctor_id = Column(Integer, ForeignKey('doctors.id'), nullable=False)
     patient_id = Column(Integer, ForeignKey('patients.id'), nullable=False)
+    visit_datetime = Column(DateTime, nullable=False)
 
     transcript_text = Column(Text, nullable=True)
+    transcript_length = Column(Integer, nullable=True)
     summary_text = Column(Text, nullable=True)
     symptoms_present = Column(JSON, nullable=True)
+    symptom_count = Column(Integer, default=0, nullable=False)
     unknown_mentions = Column(JSON, nullable=True)
     audio_path = Column(Text, nullable=True)
 

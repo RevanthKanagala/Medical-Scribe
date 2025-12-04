@@ -333,6 +333,66 @@
       color: #667eea;
     }
     
+    .search-result-card {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      border: 2px solid #48bb78;
+      margin-top: 10px;
+    }
+    
+    .search-result-card h4 {
+      color: #2d3748;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+    
+    .search-result-card p {
+      margin: 5px 0;
+      color: #4a5568;
+      font-size: 14px;
+    }
+    
+    .history-card {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      border-left: 4px solid #667eea;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .history-card:hover {
+      transform: translateX(5px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .history-card h4 {
+      color: #2d3748;
+      margin-bottom: 8px;
+      font-size: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .history-card p {
+      margin: 4px 0;
+      color: #718096;
+      font-size: 13px;
+    }
+    
+    .history-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #667eea;
+      color: white;
+    }
+    
     @media (max-width: 768px) {
       .two-column { grid-template-columns: 1fr; }
       .form-grid { grid-template-columns: 1fr; }
@@ -417,6 +477,28 @@
     <!-- Patient Registration Section -->
     <div class="card hidden" id="patientSection">
       <h2><span class="section-icon">👤</span> Patient Registration</h2>
+      
+      <!-- Patient Search -->
+      <div style="background: #f7fafc; padding: 20px; border-radius: 12px; margin-bottom: 25px;">
+        <h3 style="margin-bottom: 15px; color: #2d3748; font-size: 16px; font-weight: 600;">🔍 Search Existing Patient</h3>
+        <div style="display: flex; gap: 10px; align-items: flex-end;">
+          <div class="form-group" style="flex: 1; margin-bottom: 0;">
+            <label>Enter UHID to Search</label>
+            <input type="text" id="searchUhid" placeholder="Enter UHID" style="margin: 0;">
+          </div>
+          <button class="btn btn-primary" onclick="searchPatient()" style="margin-bottom: 0;">
+            <span>🔍</span> Search
+          </button>
+        </div>
+        <div id="searchResult" style="margin-top: 15px;"></div>
+      </div>
+
+      <!-- Consultation History -->
+      <div id="consultationHistory" class="hidden" style="background: #e6fffa; padding: 20px; border-radius: 12px; margin-bottom: 25px; border: 2px solid #38b2ac;">
+        <h3 style="margin-bottom: 15px; color: #2d3748; font-size: 16px; font-weight: 600;">📚 Previous Consultations</h3>
+        <div id="historyList"></div>
+      </div>
+
       <div class="form-grid">
         <div class="form-group">
           <label>Patient Name <span class="required">*</span></label>
@@ -443,6 +525,18 @@
           <label>Date of Birth <span class="required">*</span></label>
           <input type="date" id="dob" required>
         </div>
+        <div class="form-group">
+          <label>Phone Number</label>
+          <input type="tel" id="phone" placeholder="+91 1234567890">
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="email" placeholder="patient@example.com">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Address</label>
+        <textarea id="address" placeholder="Full Address" style="min-height: 80px;"></textarea>
       </div>
       <div class="form-group">
         <label>📅 Visit Date & Time (Auto-captured)</label>
@@ -585,6 +679,131 @@
       updateProgressSteps(1); // Move to Patient Registration step
     }
 
+    async function searchPatient() {
+      const uhid = document.getElementById('searchUhid').value.trim();
+      if (!uhid) {
+        alert('Please enter a UHID');
+        return;
+      }
+
+      const searchResult = document.getElementById('searchResult');
+      searchResult.innerHTML = '<p style="color: #4a5568;">🔍 Searching...</p>';
+
+      try {
+        const res = await fetch(`/patients/${uhid}`);
+        const data = await res.json();
+
+        if (data.error) {
+          searchResult.innerHTML = `<p style="color: #e53e3e; font-weight: 600;">❌ ${data.error}</p>`;
+          return;
+        }
+
+        // Auto-fill patient data
+        document.getElementById('patientName').value = data.patient.name || '';
+        document.getElementById('uhid').value = data.patient.uhid || '';
+        document.getElementById('sex').value = data.patient.sex || '';
+        document.getElementById('age').value = data.patient.age || '';
+        document.getElementById('dob').value = data.patient.dob || '';
+        document.getElementById('phone').value = data.patient.phone || '';
+        document.getElementById('email').value = data.patient.email || '';
+        document.getElementById('address').value = data.patient.address || '';
+
+        searchResult.innerHTML = `
+          <div class="search-result-card">
+            <h4>✅ Patient Found</h4>
+            <p><strong>Name:</strong> ${data.patient.name}</p>
+            <p><strong>UHID:</strong> ${data.patient.uhid}</p>
+            <p><strong>Age:</strong> ${data.patient.age} | <strong>Sex:</strong> ${data.patient.sex}</p>
+            <p><strong>Total Consultations:</strong> ${data.total_consultations}</p>
+          </div>
+        `;
+
+        // Display consultation history
+        if (data.consultations && data.consultations.length > 0) {
+          displayConsultationHistory(data.consultations);
+        }
+      } catch (err) {
+        searchResult.innerHTML = `<p style="color: #e53e3e;">❌ Search failed: ${err.message}</p>`;
+      }
+    }
+
+    function displayConsultationHistory(consultations) {
+      const historySection = document.getElementById('consultationHistory');
+      const historyList = document.getElementById('historyList');
+      
+      historySection.classList.remove('hidden');
+      historyList.innerHTML = '';
+
+      consultations.forEach(consult => {
+        const card = document.createElement('div');
+        card.className = 'history-card';
+        card.onclick = () => viewConsultation(consult.id);
+        
+        const visitDate = new Date(consult.visit_datetime).toLocaleString('en-IN');
+        card.innerHTML = `
+          <h4>
+            <span>📋 Visit: ${visitDate}</span>
+            <span class="history-badge">${consult.symptom_count} Symptoms</span>
+          </h4>
+          <p><strong>Doctor:</strong> ${consult.doctor_name} (${consult.doctor_department})</p>
+          <p><strong>Summary:</strong> ${consult.summary || 'No summary available'}</p>
+        `;
+        historyList.appendChild(card);
+      });
+    }
+
+    async function viewConsultation(consultationId) {
+      try {
+        const res = await fetch(`/consultations/${consultationId}`);
+        const data = await res.json();
+
+        if (data.error) {
+          alert('Error: ' + data.error);
+          return;
+        }
+
+        // Create modal-style display
+        const modalHTML = `
+          <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px;" onclick="this.remove()">
+            <div style="background: white; padding: 30px; border-radius: 20px; max-width: 900px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
+              <h2 style="margin-bottom: 20px; color: #2d3748;">📋 Consultation Details</h2>
+              
+              <div style="background: #f7fafc; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                <p><strong>Visit Date:</strong> ${new Date(data.visit_datetime).toLocaleString('en-IN')}</p>
+                <p><strong>Doctor:</strong> ${data.doctor.name} (${data.doctor.designation})</p>
+                <p><strong>Department:</strong> ${data.doctor.department}</p>
+                <p><strong>Patient:</strong> ${data.patient.name} (UHID: ${data.patient.uhid})</p>
+              </div>
+
+              <h3 style="color: #2d3748; margin: 20px 0 10px;">📝 Transcript</h3>
+              <div style="background: #f7fafc; padding: 15px; border-radius: 10px; max-height: 200px; overflow-y: auto; font-size: 13px; line-height: 1.6;">
+                ${data.transcript || 'No transcript available'}
+              </div>
+
+              <h3 style="color: #2d3748; margin: 20px 0 10px;">🔍 Symptoms (${data.symptom_count})</h3>
+              <div style="background: #c6f6d5; padding: 15px; border-radius: 10px;">
+                ${data.symptoms_present && data.symptoms_present.length > 0 ? 
+                  data.symptoms_present.map(s => `<span style="display: inline-block; background: white; padding: 5px 10px; margin: 3px; border-radius: 8px; font-size: 13px;"><strong>${s.name}</strong> (${s.code})</span>`).join('') 
+                  : 'No symptoms recorded'}
+              </div>
+
+              <h3 style="color: #2d3748; margin: 20px 0 10px;">📋 Medical Summary</h3>
+              <div style="background: #2d3748; color: #e2e8f0; padding: 20px; border-radius: 10px; font-family: monospace; font-size: 13px; line-height: 1.8; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">
+${data.summary || 'No summary available'}
+              </div>
+
+              <button class="btn btn-primary" onclick="this.parentElement.parentElement.remove()" style="margin-top: 20px;">
+                Close
+              </button>
+            </div>
+          </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+      } catch (err) {
+        alert('Failed to load consultation: ' + err.message);
+      }
+    }
+
     function savePatientInfo() {
       patientInfo = {
         name: document.getElementById('patientName').value,
@@ -592,11 +811,14 @@
         sex: document.getElementById('sex').value,
         age: document.getElementById('age').value,
         dob: document.getElementById('dob').value,
+        phone: document.getElementById('phone').value,
+        email: document.getElementById('email').value,
+        address: document.getElementById('address').value,
         visitDateTime: document.getElementById('visitDateTime').value
       };
 
       if (!patientInfo.name || !patientInfo.uhid || !patientInfo.sex || !patientInfo.age || !patientInfo.dob) {
-        alert('Please fill all patient information fields');
+        alert('Please fill all required patient information fields');
         return;
       }
 
@@ -675,6 +897,7 @@
       fd.append('transcript', transcript);
       fd.append('doctor_info', JSON.stringify(doctorInfo));
       fd.append('patient_info', JSON.stringify(patientInfo));
+      fd.append('audio_path', '');
 
       try {
         const res = await fetch('/summarize', { method: 'POST', body: fd });

@@ -10,4 +10,7 @@ aiofiles==23.1.0
 python-multipart==0.0.6
 requests==2.31.0
 assemblyai==0.46.0
-SQLAlchemy==2.0.23
+databases
+aiosqlite
+ngrok
+SQLAlchemy==2.0.32

@@ -4,6 +4,8 @@ and convert to symptoms_catalog.csv format with codes, names, aliases, and categ
 """
 import csv
 from pathlib import Path
+import sqlite3
+from databases import Database
 
 # Paths
 large_dataset = Path("data/Final_Augmented_dataset_Diseases_and_Symptoms.csv")
@@ -111,3 +113,46 @@ for category, count in sorted(category_counts.items(), key=lambda x: x[1], rever
 print("\n✅ First 10 symptoms:")
 for entry in catalog_entries[:10]:
     print(f"   {entry['code']}: {entry['name']} ({entry['category']})")
+
+# Connect to the database
+DATABASE_URL = "sqlite:///medical_scribe.db"
+database = Database(DATABASE_URL)
+
+async def setup_database():
+    await database.connect()
+    query = """
+    CREATE TABLE IF NOT EXISTS doctors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        department TEXT NOT NULL,
+        designation TEXT NOT NULL,
+        patient_type TEXT
+    )
+    """
+    await database.execute(query)
+
+async def add_doctor(name, department, designation, patient_type):
+    query = """
+    INSERT INTO doctors (name, department, designation, patient_type)
+    VALUES (:name, :department, :designation, :patient_type)
+    """
+    values = {"name": name, "department": department, "designation": designation, "patient_type": patient_type}
+    await database.execute(query, values)
+
+async def get_doctors():
+    query = "SELECT * FROM doctors"
+    return await database.fetch_all(query)
+
+# Initialize the database
+await setup_database()
+
+# Insert a record
+await add_doctor("Dr. Smith", "Cardiology", "Consultant", "Outpatient")
+
+# Query records
+doctors = await get_doctors()
+for doctor in doctors:
+    print(doctor)
+
+# Commit and close
+await database.close()
