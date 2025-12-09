@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Medical Scribe - Consultation</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body data-step="consultation">
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>🏥 AI Medical Scribe System</h1>
+        <p>Capture the conversation, transcribe, and auto-summarize.</p>
+      </div>
+      <div class="header-right">
+        <div class="header-badge">✨ AIMS Powered</div>
+        <div class="header-time" id="headerTime">--</div>
+      </div>
+    </div>
+
+    <nav class="progress-nav" id="progressNav"></nav>
+
+    <div class="card">
+      <h2><span class="section-icon">🎙️</span> Record Consultation</h2>
+      <div class="recording-section">
+        <button class="btn btn-success" id="startBtn" type="button"><span>▶</span> Start Recording</button>
+        <button class="btn btn-danger" id="stopBtn" type="button" disabled><span>⏹</span> Stop Recording</button>
+        <span class="status idle" id="statusBadge">Idle</span>
+        <input type="file" id="fileInput" accept="audio/*" class="hidden">
+        <button class="btn btn-upload" type="button" onclick="document.getElementById('fileInput').click()"><span>📁</span> Upload Audio</button>
+      </div>
+      <h3 style="margin-top:30px;color:#2d3748;font-weight:600;">📝 Transcript</h3>
+      <textarea id="transcript" class="large" placeholder="Recording transcription will appear here..."></textarea>
+      <div class="nav-controls" style="justify-content:flex-end;">
+        <a class="btn btn-upload" href="patient.html"><span>←</span> Back to Patient</a>
+        <button class="btn btn-primary" type="button" id="generateSummaryBtn"><span>✨</span> Generate Summary</button>
+      </div>
+    </div>
+
+    <div class="card hidden" id="symptomsSection">
+      <h2><span class="section-icon">🔍</span> Symptom Analysis Preview</h2>
+      <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));">
+        <div class="symptom-box matched">
+          <h3>✅ Validated Symptoms</h3>
+          <ul class="symptom-list" id="validatedSymptoms">
+            <li>No symptoms processed yet</li>
+          </ul>
+        </div>
+        <div class="symptom-box unknown">
+          <h3>⚠️ Unknown Mentions</h3>
+          <ul class="symptom-list" id="unknownSymptoms">
+            <li>No unknown mentions</li>
+          </ul>
+        </div>
+      </div>
+      <div class="nav-controls" style="justify-content:flex-end;">
+        <button class="btn btn-primary" type="button" id="goToSummaryBtn"><span>→</span> Jump to Summary</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/wizard.js" defer></script>
+</body>
+</html>

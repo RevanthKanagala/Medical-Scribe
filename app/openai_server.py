@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 # Force reload environment variables to get latest values
 load_dotenv(override=True)
 
-from fastapi import FastAPI, File, UploadFile, Form, Depends
+from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
@@ -23,12 +23,17 @@ import socket
 import tempfile
 import subprocess
 import time
-from uuid import uuid4
 import threading
 import requests
-from sqlalchemy.orm import Session
 
-from app.database import get_db, Doctor, Patient, Consultation
+from app.database import (
+    upsert_doctor,
+    upsert_patient,
+    add_consultation_record,
+    get_patient_with_history,
+    get_consultation_by_id,
+    generate_next_uhid,
+)
 
 # Import symptom extraction pipeline
 from app.symptom_pipeline import (
@@ -274,6 +279,17 @@ Extract ONLY what is mentioned. Use null for missing information."""
             report.append(f"  Age: {patient_info.get('age', 'N/A')} years")
             report.append(f"  Date of Birth: {patient_info.get('dob', 'N/A')}")
             report.append(f"  Visit Date/Time: {patient_info.get('visitDateTime', 'N/A')}")
+            unit_suite = patient_info.get('unitSuite') or patient_info.get('unit_suite')
+            street = patient_info.get('street')
+            city = patient_info.get('city')
+            province = patient_info.get('province')
+            postal_code = patient_info.get('postalCode') or patient_info.get('postal_code')
+            address_line = patient_info.get('address')
+            address_parts = [part for part in [unit_suite, street, city, province, postal_code] if part]
+            if address_parts:
+                report.append(f"  Address: {', '.join(address_parts)}")
+            elif address_line:
+                report.append(f"  Address: {address_line}")
             report.append("")
         
         # Chief Complaints
@@ -591,49 +607,6 @@ def _parse_visit_datetime(value: Optional[str]) -> datetime:
         return datetime.utcnow()
 
 
-def _get_or_create_doctor(db: Session, doctor_data: dict) -> Optional[Doctor]:
-    if not doctor_data or not doctor_data.get('name'):
-        return None
-    query = db.query(Doctor).filter(
-        Doctor.name == doctor_data.get('name'),
-        Doctor.department == doctor_data.get('department'),
-        Doctor.designation == doctor_data.get('designation'),
-        Doctor.patient_type == doctor_data.get('patientType')
-    )
-    doctor = query.first()
-    if doctor:
-        return doctor
-    doctor = Doctor(
-        name=doctor_data.get('name'),
-        department=doctor_data.get('department'),
-        designation=doctor_data.get('designation'),
-        patient_type=doctor_data.get('patientType')
-    )
-    db.add(doctor)
-    db.commit()
-    db.refresh(doctor)
-    return doctor
-
-
-def _create_or_update_patient(db: Session, patient_data: dict) -> Optional[Patient]:
-    if not patient_data or not patient_data.get('uhid'):
-        return None
-    patient = db.query(Patient).filter(Patient.uhid == patient_data['uhid']).first()
-    if not patient:
-        patient = Patient(uhid=patient_data['uhid'])
-        db.add(patient)
-    patient.name = patient_data.get('name', patient.name)
-    patient.sex = patient_data.get('sex', patient.sex)
-    patient.age = patient_data.get('age', patient.age)
-    patient.dob = patient_data.get('dob', patient.dob)
-    patient.phone = patient_data.get('phone', patient.phone)
-    patient.email = patient_data.get('email', patient.email)
-    patient.address = patient_data.get('address', patient.address)
-    db.commit()
-    db.refresh(patient)
-    return patient
-
-
 
 @app.post('/upload')
 async def upload_audio(file: UploadFile = File(...)):
@@ -727,8 +700,7 @@ async def summarize_endpoint(
     transcript: str = Form(...),
     doctor_info: str = Form(None),
     patient_info: str = Form(None),
-    audio_path: str = Form(None),
-    db: Session = Depends(get_db)
+    audio_path: str = Form(None)
 ):
     """Generate comprehensive medical summary with doctor and patient information."""
     global last_summary, last_symptom_extraction
@@ -769,27 +741,21 @@ async def summarize_endpoint(
         # Step 3: Persist consultation data
         consultation_id = None
         try:
-            doctor = _get_or_create_doctor(db, doctor_data)
-            patient = _create_or_update_patient(db, patient_data)
+            doctor = upsert_doctor(doctor_data)
+            patient = upsert_patient(patient_data)
             if doctor and patient:
-                consultation = Consultation(
-                    doctor_id=doctor.id,
-                    patient_id=patient.id,
+                consultation_id = add_consultation_record(
+                    doctor_id=doctor['id'],
+                    patient_id=patient['id'],
                     visit_datetime=_parse_visit_datetime(patient_data.get('visitDateTime')),
-                    transcript_text=transcript,
-                    transcript_length=len(transcript),
-                    summary_text=summary,
+                    transcript=transcript,
+                    summary=summary,
                     symptoms_present=symptom_result['symptoms_present'],
                     symptom_count=symptom_result['symptom_count'],
                     unknown_mentions=symptom_result['unknown_mentions'],
-                    audio_path=audio_path
+                    audio_path=audio_path,
                 )
-                db.add(consultation)
-                db.commit()
-                db.refresh(consultation)
-                consultation_id = consultation.id
         except Exception as db_error:
-            db.rollback()
             print(f"[DB] Failed to persist consultation: {db_error}")
 
         # Return summary + symptom data
@@ -836,47 +802,43 @@ def create_or_get_doctor(
     name: str = Form(...),
     department: str = Form(...),
     designation: str = Form(...),
-    patient_type: str = Form(None),
-    db: Session = Depends(get_db)
+    patient_type: str = Form(None)
 ):
     """Create or retrieve a doctor by their details."""
     try:
-        doctor = _get_or_create_doctor(db, {
+        doctor = upsert_doctor({
             'name': name,
             'department': department,
             'designation': designation,
             'patientType': patient_type
         })
-        return {
-            'status': 'created' if doctor else 'error',
-            'doctor': {
-                'id': doctor.id,
-                'name': doctor.name,
-                'department': doctor.department,
-                'designation': doctor.designation,
-                'patient_type': doctor.patient_type
-            }
-        }
+        if not doctor:
+            return JSONResponse({'error': 'Doctor information incomplete'}, status_code=400)
+        return {'status': 'success', 'doctor': doctor}
     except Exception as e:
-        db.rollback()
         return JSONResponse({'error': f'Doctor creation failed: {e}'}, status_code=500)
 
 
 @app.post('/patients')
 def create_or_update_patient(
-    uhid: str = Form(...),
     name: str = Form(...),
     sex: str = Form(...),
     age: str = Form(...),
     dob: str = Form(...),
     phone: str = Form(None),
     email: str = Form(None),
+    unit_suite: str = Form(None),
+    street: str = Form(...),
+    city: str = Form(...),
+    province: str = Form(...),
+    postal_code: str = Form(...),
     address: str = Form(None),
-    db: Session = Depends(get_db)
+    existing_uhid: str = Form(None)
 ):
     """Create new patient or update existing patient by UHID."""
     try:
-        patient = _create_or_update_patient(db, {
+        uhid = existing_uhid or generate_next_uhid()
+        payload = {
             'uhid': uhid,
             'name': name,
             'sex': sex,
@@ -884,90 +846,43 @@ def create_or_update_patient(
             'dob': dob,
             'phone': phone,
             'email': email,
-            'address': address
-        })
-        return {
-            'status': 'success',
-            'patient': {
-                'id': patient.id,
-                'uhid': patient.uhid,
-                'name': patient.name
-            }
+            'unit_suite': unit_suite,
+            'street': street,
+            'city': city,
+            'province': province,
+            'postal_code': postal_code,
+            'address': address,
         }
+        patient = upsert_patient(payload)
+        if not patient:
+            return JSONResponse({'error': 'Patient information incomplete'}, status_code=400)
+        return {'status': 'success', 'patient': patient}
     except Exception as e:
-        db.rollback()
         return JSONResponse({'error': f'Patient save failed: {e}'}, status_code=500)
 
 
 @app.get('/patients/{uhid}')
-def get_patient_by_uhid(uhid: str, db: Session = Depends(get_db)):
+def get_patient_by_uhid(uhid: str):
     """Get patient details and consultation history by UHID."""
-    patient = db.query(Patient).filter(Patient.uhid == uhid).first()
-    if not patient:
+    result = get_patient_with_history(uhid)
+    if not result:
         return JSONResponse({'error': 'Patient not found'}, status_code=404)
 
-    consultations = (
-        db.query(Consultation)
-        .filter(Consultation.patient_id == patient.id)
-        .order_by(Consultation.visit_datetime.desc())
-        .all()
-    )
-    history = []
-    for c in consultations:
-        history.append({
-            'id': c.id,
-            'visit_datetime': c.visit_datetime.isoformat() if c.visit_datetime else None,
-            'doctor_name': c.doctor.name if c.doctor else None,
-            'doctor_department': c.doctor.department if c.doctor else None,
-            'symptom_count': c.symptom_count,
-            'summary': c.summary_text[:250] + '...' if c.summary_text and len(c.summary_text) > 250 else c.summary_text
-        })
-
+    patient, history = result
     return {
-        'patient': {
-            'id': patient.id,
-            'name': patient.name,
-            'uhid': patient.uhid,
-            'sex': patient.sex,
-            'age': patient.age,
-            'dob': patient.dob,
-            'phone': patient.phone,
-            'email': patient.email,
-            'address': patient.address,
-        },
+        'patient': patient,
         'total_consultations': len(history),
         'consultations': history
     }
 
 
 @app.get('/consultations/{consultation_id}')
-def get_consultation(consultation_id: int, db: Session = Depends(get_db)):
+def get_consultation(consultation_id: int):
     """Get full consultation details including transcript and summary."""
-    consultation = db.query(Consultation).filter(Consultation.id == consultation_id).first()
+    consultation = get_consultation_by_id(consultation_id)
     if not consultation:
         return JSONResponse({'error': 'Consultation not found'}, status_code=404)
-
-    return {
-        'id': consultation.id,
-        'visit_datetime': consultation.visit_datetime.isoformat() if consultation.visit_datetime else None,
-        'doctor': {
-            'id': consultation.doctor.id if consultation.doctor else None,
-            'name': consultation.doctor.name if consultation.doctor else None,
-            'department': consultation.doctor.department if consultation.doctor else None,
-            'designation': consultation.doctor.designation if consultation.doctor else None,
-        },
-        'patient': {
-            'id': consultation.patient.id if consultation.patient else None,
-            'name': consultation.patient.name if consultation.patient else None,
-            'uhid': consultation.patient.uhid if consultation.patient else None,
-        },
-        'transcript': consultation.transcript_text,
-        'summary': consultation.summary_text,
-        'symptom_count': consultation.symptom_count,
-        'symptoms_present': consultation.symptoms_present,
-        'unknown_mentions': consultation.unknown_mentions,
-        'audio_path': consultation.audio_path
-    }
+    return consultation
 
 
 @app.post('/approve_symptom')

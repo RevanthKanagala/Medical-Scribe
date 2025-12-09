@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Medical Scribe - Patient Registration</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body data-step="patient">
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>🏥 AI Medical Scribe System</h1>
+        <p>Register patients, review history, and keep UHIDs consistent.</p>
+      </div>
+      <div class="header-right">
+        <div class="header-badge">✨ AIMS Powered</div>
+        <div class="header-time" id="headerTime">--</div>
+      </div>
+    </div>
+
+    <nav class="progress-nav" id="progressNav"></nav>
+
+    <div class="card">
+      <h2><span class="section-icon">👤</span> Patient Registration</h2>
+      
+      <section style="background:#f7fafc;padding:20px;border-radius:12px;margin-bottom:25px;">
+        <h3 style="margin-bottom:15px;color:#2d3748;font-size:16px;font-weight:600;">🔍 Existing Patient Lookup</h3>
+        <div class="form-grid" style="margin-bottom:10px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label for="searchUhid">Enter UHID</label>
+            <input type="text" id="searchUhid" placeholder="E.g., AIMS0123">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-primary" type="button" id="searchBtn"><span>🔍</span> Search</button>
+          <button class="btn btn-upload" type="button" id="resetRegistration"><span>↺</span> Start New Registration</button>
+        </div>
+        <div id="searchResult" style="margin-top:15px;"></div>
+      </section>
+
+      <div id="consultationHistory" class="hidden" style="background:#e6fffa;padding:20px;border-radius:12px;margin-bottom:25px;border:2px solid #38b2ac;">
+        <h3 style="margin-bottom:15px;color:#2d3748;font-size:16px;font-weight:600;">📚 Previous Consultations</h3>
+        <div id="historyList"></div>
+      </div>
+
+      <form id="patientForm">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="patientName">Patient Name <span class="required">*</span></label>
+            <input type="text" id="patientName" name="patientName" placeholder="Full Name" required>
+          </div>
+          <div class="form-group">
+            <label for="sex">Sex <span class="required">*</span></label>
+            <select id="sex" name="sex" required>
+              <option value="">Select</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="age">Age <span class="required">*</span></label>
+            <input type="number" id="age" name="age" placeholder="Age in years" min="0" max="150" required>
+          </div>
+          <div class="form-group">
+            <label for="dob">Date of Birth <span class="required">*</span></label>
+            <input type="date" id="dob" name="dob" required>
+          </div>
+          <div class="form-group">
+            <label for="phone">Phone Number</label>
+            <input type="tel" id="phone" name="phone" placeholder="+1 123-456-7890">
+          </div>
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" placeholder="patient@example.com">
+          </div>
+        </div>
+
+        <h3 style="margin:15px 0;color:#2d3748;">🏠 Address Details</h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="unitSuite">Unit / Suite</label>
+            <input type="text" id="unitSuite" name="unitSuite" placeholder="Apartment, Suite, etc.">
+          </div>
+          <div class="form-group">
+            <label for="street">Street Address <span class="required">*</span></label>
+            <input type="text" id="street" name="street" placeholder="Street and number" required>
+          </div>
+          <div class="form-group">
+            <label for="province">Province <span class="required">*</span></label>
+            <select id="province" name="province" required>
+              <option value="">Select Province</option>
+              <option value="Alberta">Alberta</option>
+              <option value="British Columbia">British Columbia</option>
+              <option value="Manitoba">Manitoba</option>
+              <option value="New Brunswick">New Brunswick</option>
+              <option value="Newfoundland and Labrador">Newfoundland and Labrador</option>
+              <option value="Northwest Territories">Northwest Territories</option>
+              <option value="Nova Scotia">Nova Scotia</option>
+              <option value="Nunavut">Nunavut</option>
+              <option value="Ontario">Ontario</option>
+              <option value="Prince Edward Island">Prince Edward Island</option>
+              <option value="Quebec">Quebec</option>
+              <option value="Saskatchewan">Saskatchewan</option>
+              <option value="Yukon">Yukon</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="city">City <span class="required">*</span></label>
+            <input type="text" id="city" name="city" placeholder="City / Municipality" required>
+          </div>
+          <div class="form-group">
+            <label for="postalCode">Postal Code <span class="required">*</span></label>
+            <input type="text" id="postalCode" name="postalCode" placeholder="e.g., M5V 2T6" maxlength="10" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="visitDateTime">📅 Visit Date &amp; Time (Auto-captured)</label>
+          <input type="text" id="visitDateTime" name="visitDateTime" readonly style="background:#f7fafc;cursor:not-allowed;">
+        </div>
+
+        <div class="nav-controls" style="justify-content:space-between;">
+          <a class="btn btn-upload" href="index.html"><span>←</span> Back to Doctor Info</a>
+          <button class="btn btn-primary" type="submit"><span>→</span> Save &amp; Continue</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/wizard.js" defer></script>
+</body>
+</html>

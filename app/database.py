@@ -1,103 +1,327 @@
+"""Simple sqlite3 helpers for Medical Scribe data."""
+
 from __future__ import annotations
 
-import os
+import json
+import sqlite3
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Generator, Optional
-
-from sqlalchemy import (
-    create_engine,
-    Column,
-    Integer,
-    String,
-    DateTime,
-    Text,
-    ForeignKey,
-    UniqueConstraint,
-)
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Session
-from sqlalchemy.types import JSON
+from typing import Dict, List, Optional, Tuple
 
 
-# Ensure data directory exists for sqlite file
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / 'data'
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = DATA_DIR / 'medical_scribe.db'
-DATABASE_URL = f"sqlite:///{DB_PATH.as_posix()}"
-
-# For SQLite + FastAPI, allow check_same_thread=False
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False}
-)
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
 
 
-class Doctor(Base):
-    __tablename__ = 'doctors'
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
-    department = Column(String(255), nullable=True)
-    designation = Column(String(255), nullable=True)
-    patient_type = Column(String(64), nullable=True)  # Out-Patient / In-Patient
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint('name', 'department', 'designation', 'patient_type', name='uq_doctor_identity'),
-    )
-
-    consultations = relationship('Consultation', back_populates='doctor')
+def _connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
-class Patient(Base):
-    __tablename__ = 'patients'
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
-    uhid = Column(String(128), nullable=False, unique=True, index=True)
-    sex = Column(String(32), nullable=True)
-    age = Column(String(8), nullable=True)  # store as string to avoid parsing issues
-    dob = Column(String(32), nullable=True)
-    phone = Column(String(20), nullable=True)
-    email = Column(String(100), nullable=True)
-    address = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-
-    consultations = relationship('Consultation', back_populates='patient')
-
-
-class Consultation(Base):
-    __tablename__ = 'consultations'
-    id = Column(Integer, primary_key=True, index=True)
-    doctor_id = Column(Integer, ForeignKey('doctors.id'), nullable=False)
-    patient_id = Column(Integer, ForeignKey('patients.id'), nullable=False)
-    visit_datetime = Column(DateTime, nullable=False)
-
-    transcript_text = Column(Text, nullable=True)
-    transcript_length = Column(Integer, nullable=True)
-    summary_text = Column(Text, nullable=True)
-    symptoms_present = Column(JSON, nullable=True)
-    symptom_count = Column(Integer, default=0, nullable=False)
-    unknown_mentions = Column(JSON, nullable=True)
-    audio_path = Column(Text, nullable=True)
-
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-    doctor = relationship('Doctor', back_populates='consultations')
-    patient = relationship('Patient', back_populates='consultations')
-
-
-# Create tables on import
-Base.metadata.create_all(bind=engine)
-
-
-def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
+@contextmanager
+def get_connection():
+    conn = _connect()
     try:
-        yield db
+        yield conn
+        conn.commit()
     finally:
-        db.close()
+        conn.close()
+
+
+def _init_db():
+    create_script = """
+    CREATE TABLE IF NOT EXISTS doctors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        department TEXT,
+        designation TEXT,
+        patient_type TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(name, department, designation, patient_type)
+    );
+
+    CREATE TABLE IF NOT EXISTS patients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        uhid TEXT NOT NULL UNIQUE,
+        sex TEXT,
+        age TEXT,
+        dob TEXT,
+        phone TEXT,
+        email TEXT,
+        unit_suite TEXT,
+        street TEXT,
+        city TEXT,
+        province TEXT,
+        postal_code TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        address TEXT
+    );
+
+    CREATE TRIGGER IF NOT EXISTS patients_updated_at
+    AFTER UPDATE ON patients
+    FOR EACH ROW
+    BEGIN
+        UPDATE patients SET updated_at = CURRENT_TIMESTAMP WHERE id = old.id;
+    END;
+
+    CREATE TABLE IF NOT EXISTS consultations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        doctor_id INTEGER NOT NULL,
+        patient_id INTEGER NOT NULL,
+        visit_datetime TEXT NOT NULL,
+        transcript_text TEXT,
+        transcript_length INTEGER,
+        summary_text TEXT,
+        symptoms_present TEXT,
+        symptom_count INTEGER DEFAULT 0,
+        unknown_mentions TEXT,
+        audio_path TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(doctor_id) REFERENCES doctors(id),
+        FOREIGN KEY(patient_id) REFERENCES patients(id)
+    );
+    """
+    with get_connection() as conn:
+        conn.executescript(create_script)
+
+
+_init_db()
+
+
+def _ensure_patient_columns():
+    required_columns = {
+        'unit_suite': 'TEXT',
+        'street': 'TEXT',
+        'city': 'TEXT',
+        'province': 'TEXT',
+        'postal_code': 'TEXT',
+    }
+    with get_connection() as conn:
+        existing = {row['name'] for row in conn.execute('PRAGMA table_info(patients)')}
+        for column, column_type in required_columns.items():
+            if column not in existing:
+                conn.execute(f'ALTER TABLE patients ADD COLUMN {column} {column_type}')
+
+
+_ensure_patient_columns()
+
+
+def _generate_next_uhid(conn: sqlite3.Connection) -> str:
+    row = conn.execute(
+        """SELECT uhid FROM patients 
+            WHERE uhid LIKE 'AIMS%'
+            ORDER BY LENGTH(uhid) DESC, uhid DESC
+            LIMIT 1"""
+    ).fetchone()
+    if not row or not row['uhid'][4:].isdigit():
+        return 'AIMS0001'
+    next_number = int(row['uhid'][4:]) + 1
+    return f"AIMS{next_number:04d}"
+
+
+def generate_next_uhid() -> str:
+    with get_connection() as conn:
+        return _generate_next_uhid(conn)
+
+
+def upsert_doctor(data: Optional[dict]) -> Optional[Dict]:
+    if not data or not data.get('name'):
+        return None
+
+    params = (
+        data.get('name'),
+        data.get('department'),
+        data.get('designation'),
+        data.get('patientType'),
+    )
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT * FROM doctors
+                WHERE name = ?
+                AND COALESCE(department, '') = COALESCE(?, '')
+                AND COALESCE(designation, '') = COALESCE(?, '')
+                AND COALESCE(patient_type, '') = COALESCE(?, '')""",
+            params,
+        ).fetchone()
+        if row:
+            return dict(row)
+
+        conn.execute(
+            """INSERT INTO doctors (name, department, designation, patient_type, created_at)
+            VALUES (?, ?, ?, ?, ?)""",
+            (*params, datetime.utcnow().isoformat()),
+        )
+        doc_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+        new_row = conn.execute('SELECT * FROM doctors WHERE id = ?', (doc_id,)).fetchone()
+        return dict(new_row) if new_row else None
+
+
+def upsert_patient(data: Optional[dict]) -> Optional[Dict]:
+    if not data or not data.get('name'):
+        return None
+
+    with get_connection() as conn:
+        uhid = data.get('uhid') or _generate_next_uhid(conn)
+        row = conn.execute('SELECT * FROM patients WHERE uhid = ?', (uhid,)).fetchone()
+        payload = (
+            data.get('name'),
+            data.get('sex'),
+            data.get('age'),
+            data.get('dob'),
+            data.get('phone'),
+            data.get('email'),
+            data.get('unit_suite'),
+            data.get('street'),
+            data.get('city'),
+            data.get('province'),
+            data.get('postal_code'),
+            data.get('address'),
+            uhid,
+        )
+        if row:
+            conn.execute(
+                """UPDATE patients
+                    SET name=?, sex=?, age=?, dob=?, phone=?, email=?,
+                        unit_suite=?, street=?, city=?, province=?, postal_code=?, address=?
+                    WHERE uhid=?""",
+                payload,
+            )
+        else:
+            conn.execute(
+                """INSERT INTO patients (
+                        name, sex, age, dob, phone, email,
+                        unit_suite, street, city, province, postal_code, address,
+                        uhid, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    data.get('name'),
+                    data.get('sex'),
+                    data.get('age'),
+                    data.get('dob'),
+                    data.get('phone'),
+                    data.get('email'),
+                    data.get('unit_suite'),
+                    data.get('street'),
+                    data.get('city'),
+                    data.get('province'),
+                    data.get('postal_code'),
+                    data.get('address'),
+                    uhid,
+                    datetime.utcnow().isoformat(),
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+
+        updated = conn.execute('SELECT * FROM patients WHERE uhid = ?', (uhid,)).fetchone()
+        return dict(updated) if updated else None
+
+
+def add_consultation_record(
+    *,
+    doctor_id: int,
+    patient_id: int,
+    visit_datetime: datetime,
+    transcript: str,
+    summary: str,
+    symptoms_present: Optional[List[dict]],
+    symptom_count: int,
+    unknown_mentions: Optional[List[dict]],
+    audio_path: Optional[str],
+) -> Optional[int]:
+    visit_str = visit_datetime.isoformat() if isinstance(visit_datetime, datetime) else str(visit_datetime)
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO consultations (
+                doctor_id, patient_id, visit_datetime, transcript_text, transcript_length,
+                summary_text, symptoms_present, symptom_count, unknown_mentions, audio_path, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                doctor_id,
+                patient_id,
+                visit_str,
+                transcript,
+                len(transcript) if transcript else None,
+                summary,
+                json.dumps(symptoms_present or []),
+                symptom_count,
+                json.dumps(unknown_mentions or []),
+                audio_path,
+                datetime.utcnow().isoformat(),
+            ),
+        )
+        consult_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+        return consult_id
+
+
+def get_patient_with_history(uhid: str) -> Optional[Tuple[Dict, List[Dict]]]:
+    with get_connection() as conn:
+        patient = conn.execute('SELECT * FROM patients WHERE uhid = ?', (uhid,)).fetchone()
+        if not patient:
+            return None
+
+        consultations = conn.execute(
+            """SELECT c.*, d.name AS doctor_name, d.department AS doctor_department
+            FROM consultations c
+            LEFT JOIN doctors d ON c.doctor_id = d.id
+            WHERE c.patient_id = ?
+            ORDER BY c.visit_datetime DESC""",
+            (patient['id'],),
+        ).fetchall()
+
+        history: List[Dict] = []
+        for row in consultations:
+            history.append({
+                'id': row['id'],
+                'visit_datetime': row['visit_datetime'],
+                'doctor_name': row['doctor_name'],
+                'doctor_department': row['doctor_department'],
+                'symptom_count': row['symptom_count'],
+                'summary': row['summary_text'],
+            })
+
+        return dict(patient), history
+
+
+def get_consultation_by_id(consultation_id: int) -> Optional[Dict]:
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT c.*, d.name AS doctor_name, d.department AS doctor_department,
+                       d.designation AS doctor_designation,
+                       p.name AS patient_name, p.uhid AS patient_uhid
+            FROM consultations c
+            LEFT JOIN doctors d ON c.doctor_id = d.id
+            LEFT JOIN patients p ON c.patient_id = p.id
+            WHERE c.id = ?""",
+            (consultation_id,),
+        ).fetchone()
+        if not row:
+            return None
+
+        return {
+            'id': row['id'],
+            'visit_datetime': row['visit_datetime'],
+            'doctor': {
+                'id': row['doctor_id'],
+                'name': row['doctor_name'],
+                'department': row['doctor_department'],
+                'designation': row['doctor_designation'],
+            },
+            'patient': {
+                'id': row['patient_id'],
+                'name': row['patient_name'],
+                'uhid': row['patient_uhid'],
+            },
+            'transcript': row['transcript_text'],
+            'summary': row['summary_text'],
+            'symptom_count': row['symptom_count'],
+            'symptoms_present': json.loads(row['symptoms_present'] or '[]'),
+            'unknown_mentions': json.loads(row['unknown_mentions'] or '[]'),
+            'audio_path': row['audio_path'],
+        }

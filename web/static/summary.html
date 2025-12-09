@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Medical Scribe - Summary</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body data-step="summary">
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>🏥 AI Medical Scribe System</h1>
+        <p>Review the AI-generated summary and validated symptoms.</p>
+      </div>
+      <div class="header-right">
+        <div class="header-badge">✨ AIMS Powered</div>
+        <div class="header-time" id="headerTime">--</div>
+      </div>
+    </div>
+
+    <nav class="progress-nav" id="progressNav"></nav>
+
+    <div class="card">
+      <h2><span class="section-icon">📋</span> Medical Summary Report</h2>
+      <div class="summary-output" id="summaryOutput">Summary will appear here once generated.</div>
+      <div class="nav-controls" style="justify-content:space-between;margin-top:20px;">
+        <a class="btn btn-upload" href="consultation.html"><span>←</span> Back to Consultation</a>
+        <button class="btn btn-success" type="button" id="downloadSummaryBtn"><span>💾</span> Download Summary</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="section-icon">🩺</span> Symptom Validation</h2>
+      <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));">
+        <div class="symptom-box matched">
+          <h3>✅ Validated Symptoms</h3>
+          <ul class="symptom-list" id="validatedSymptoms">
+            <li>No data yet</li>
+          </ul>
+        </div>
+        <div class="symptom-box unknown">
+          <h3>⚠️ Unknown Mentions</h3>
+          <ul class="symptom-list" id="unknownSymptoms">
+            <li>No data yet</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/wizard.js" defer></script>
+</body>
+</html>
