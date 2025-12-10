@@ -10,6 +10,7 @@ import os
 import json
 from pathlib import Path
 from datetime import datetime
+from pydub import AudioSegment
 from typing import Optional
 from dotenv import load_dotenv
 # Force reload environment variables to get latest values
