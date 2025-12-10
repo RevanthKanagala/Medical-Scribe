@@ -13,4 +13,4 @@ assemblyai==0.46.0
 databases
 aiosqlite
 ngrok
-SQLAlchemy==2.0.32
+pydub

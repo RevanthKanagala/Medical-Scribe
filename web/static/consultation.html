@@ -27,7 +27,7 @@
         <button class="btn btn-danger" id="stopBtn" type="button" disabled><span>⏹</span> Stop Recording</button>
         <span class="status idle" id="statusBadge">Idle</span>
         <input type="file" id="fileInput" accept="audio/*" class="hidden">
-        <button class="btn btn-upload" type="button" onclick="document.getElementById('fileInput').click()"><span>📁</span> Upload Audio</button>
+        <button class="btn btn-upload" type="button" id="uploadAudioBtn" onclick="document.getElementById('fileInput').click()"><span>📁</span> Upload Audio</button>
       </div>
       <h3 style="margin-top:30px;color:#2d3748;font-weight:600;">📝 Transcript</h3>
       <textarea id="transcript" class="large" placeholder="Recording transcription will appear here..."></textarea>

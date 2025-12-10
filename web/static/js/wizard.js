@@ -447,6 +447,11 @@ function setupConsultationPage() {
 }
 
 async function startRecording() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    return;
+  }
+
+  toggleRecordingState(true);
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     mediaRecorder = new MediaRecorder(stream);
@@ -454,33 +459,73 @@ async function startRecording() {
     mediaRecorder.ondataavailable = event => recordedChunks.push(event.data);
     mediaRecorder.onstop = uploadRecording;
     mediaRecorder.start();
-    toggleRecordingState(true);
   } catch (err) {
+    toggleRecordingState(false);
     showToast('Microphone access denied: ' + err.message);
   }
 }
 
 function stopRecording() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    toggleRecordingState('processing');
     mediaRecorder.stop();
-    toggleRecordingState(false);
   }
 }
 
-function toggleRecordingState(isRecording) {
+function toggleRecordingState(state) {
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
+  const uploadBtn = document.getElementById('uploadAudioBtn');
   const status = document.getElementById('statusBadge');
-  if (startBtn) startBtn.disabled = isRecording;
-  if (stopBtn) stopBtn.disabled = !isRecording;
+
+  const stateConfig = {
+    idle: {
+      disableStart: false,
+      disableStop: true,
+      disableUpload: false,
+      statusText: 'Idle',
+      statusClass: 'idle'
+    },
+    recording: {
+      disableStart: true,
+      disableStop: false,
+      disableUpload: true,
+      statusText: '🔴 Recording...',
+      statusClass: 'recording'
+    },
+    processing: {
+      disableStart: true,
+      disableStop: true,
+      disableUpload: true,
+      statusText: '⏳ Processing...',
+      statusClass: 'processing'
+    }
+  };
+
+  const normalizedState = state === true ? 'recording' : state === false ? 'idle' : state;
+  const config = stateConfig[normalizedState] || stateConfig.idle;
+
+  const applyDisabledState = (btn, shouldDisable) => {
+    if (!btn) return;
+    btn.disabled = shouldDisable;
+    btn.classList.toggle('is-disabled', shouldDisable);
+  };
+
+  applyDisabledState(startBtn, config.disableStart);
+  applyDisabledState(uploadBtn, config.disableUpload);
+  applyDisabledState(stopBtn, config.disableStop);
+
   if (status) {
-    status.textContent = isRecording ? '🔴 Recording...' : 'Idle';
-    status.className = `status ${isRecording ? 'recording' : 'idle'}`;
+    status.textContent = config.statusText;
+    status.className = `status ${config.statusClass}`;
   }
 }
 
 async function uploadRecording() {
-  if (!recordedChunks.length) return;
+  if (!recordedChunks.length) {
+    toggleRecordingState(false);
+    return;
+  }
   const blob = new Blob(recordedChunks, { type: 'audio/webm' });
   const fd = new FormData();
   fd.append('file', blob, 'recording.webm');
@@ -495,6 +540,8 @@ async function uploadRecording() {
     if (transcriptField) transcriptField.value = data.transcript || '';
   } catch (err) {
     showToast('Upload failed: ' + err.message);
+  } finally {
+    toggleRecordingState(false);
   }
 }
 
