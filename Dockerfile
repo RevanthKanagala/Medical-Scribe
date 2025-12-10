@@ -1,6 +1,10 @@
 # syntax=docker/dockerfile:1
 FROM python:3.11-slim
 
+# Install ffmpeg (for pydub audio conversion)
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
