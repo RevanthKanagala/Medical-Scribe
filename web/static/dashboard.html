@@ -1,0 +1,378 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Executive Operations Dashboard</title>
+  <link rel="stylesheet" href="css/main.css">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+    }
+    .dashboard-shell {
+      min-height: 100vh;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .dashboard-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+    .dashboard-header h1 {
+      margin: 0;
+      font-size: 2.2rem;
+      color: #f8fafc;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #f8fafc;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .grid {
+      display: grid;
+      gap: 18px;
+    }
+    .grid-4 {
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+    .grid-3 {
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+    .grid-2 {
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    }
+    .panel {
+      background: rgba(15,23,42,0.8);
+      border: 1px solid rgba(148,163,184,0.2);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 20px 60px rgba(2,6,23,0.5);
+    }
+    .panel h2 {
+      margin-top: 0;
+      font-size: 1.2rem;
+      color: #cbd5f5;
+      letter-spacing: 0.5px;
+    }
+    .kpi-card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .kpi-value {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+    }
+    .badge.red {background:#fee2e2;color:#991b1b;}
+    .badge.yellow {background:#fef3c7;color:#92400e;}
+    .badge.green {background:#d1fae5;color:#065f46;}
+    .trend-bar {
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(148,163,184,0.2);
+      overflow: hidden;
+      margin-top: 6px;
+    }
+    .trend-bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #38bdf8, #6366f1);
+    }
+    .chart-line {
+      height: 160px;
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+    }
+    .chart-bar {
+      flex: 1;
+      background: linear-gradient(180deg, rgba(59,130,246,0.9), rgba(37,99,235,0.4));
+      border-radius: 12px 12px 0 0;
+      position: relative;
+    }
+    .chart-bar span {
+      position: absolute;
+      bottom: 100%;
+      transform: translateY(-6px);
+      font-size: 0.75rem;
+      color: #cbd5f5;
+    }
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .list-item strong {color:#f8fafc;}
+    .muted {color:#94a3b8;font-size:0.9rem;}
+    .divider {
+      margin: 12px 0;
+      border-top: 1px dashed rgba(148,163,184,0.3);
+    }
+    @media (max-width: 768px) {
+      .dashboard-shell {padding: 24px 16px;}
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-shell">
+    <div class="dashboard-header">
+      <h1>Hospital Command Center</h1>
+      <a class="back-link" href="index.html">← Back to Portal</a>
+    </div>
+
+    <section class="panel">
+      <h2>🚨 Critical Alerts</h2>
+      <div class="grid grid-4" id="criticalAlerts"></div>
+    </section>
+
+    <section class="panel">
+      <h2>📊 Patient Flow</h2>
+      <div class="grid grid-2">
+        <div>
+          <div class="grid grid-2" id="patientFlowCards"></div>
+          <div class="divider"></div>
+          <div>
+            <p class="muted">Patients per hour</p>
+            <div class="chart-line" id="patientsPerHour"></div>
+          </div>
+        </div>
+        <div>
+          <p class="muted">Throughput Highlights</p>
+          <ul id="patientInsights"></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid grid-2">
+      <div class="panel">
+        <h2>👨‍⚕️ Doctor Workload</h2>
+        <div id="doctorWorkload"></div>
+      </div>
+      <div class="panel">
+        <h2>⏱️ Time & Efficiency</h2>
+        <div id="efficiencyMetrics"></div>
+      </div>
+    </section>
+
+    <section class="grid grid-3">
+      <div class="panel">
+        <h2>🤖 AI Reliability</h2>
+        <div id="aiReliability"></div>
+      </div>
+      <div class="panel">
+        <h2>⚠️ Clinical Risk Monitoring</h2>
+        <div id="riskMonitoring"></div>
+      </div>
+      <div class="panel">
+        <h2>🔄 System Health</h2>
+        <div id="systemHealth"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>📈 Trends & Insights</h2>
+      <div class="grid grid-4" id="trendCards"></div>
+    </section>
+  </div>
+
+  <script>
+    // Placeholder data. Replace with live API calls when available.
+    const dashboardData = {
+      criticalAlerts: [
+        { label: 'High Risk Cases', value: 7, status: 'red', note: 'Respiratory distress flagged' },
+        { label: 'Validation Failures', value: 3, status: 'yellow', note: 'Summary vs symptom mismatch' },
+        { label: 'Pending Transcriptions', value: 5, status: 'yellow', note: 'Queued offline jobs' },
+        { label: 'System Alerts', value: 1, status: 'red', note: 'OpenAI latency spike' }
+      ],
+      patientFlow: {
+        totals: [
+          { label: 'Patients Today', value: 42 },
+          { label: 'Completed vs Pending', value: '31 / 11' },
+          { label: 'Avg Waiting (min)', value: 18 },
+          { label: 'Bottleneck Alerts', value: 'Triage 2' }
+        ],
+        perHour: [5, 7, 9, 6, 4, 3, 8],
+        insights: [
+          'Peak between 10AM-12PM',
+          'Triage queue reached 85% capacity',
+          'Discharge time improved by 12%'
+        ]
+      },
+      doctorWorkload: {
+        perDoctor: [
+          { name: 'Dr. Rao', patients: 9, avgTime: '11 min', aiUsage: 92 },
+          { name: 'Dr. Singh', patients: 14, avgTime: '15 min', aiUsage: 65 },
+          { name: 'Dr. Patel', patients: 6, avgTime: '9 min', aiUsage: 88 }
+        ],
+        overloaded: ['Dr. Singh']
+      },
+      efficiency: [
+        { label: 'Time Saved Today', value: '3.4 hrs', delta: '+14%' },
+        { label: 'Documentation Time', value: '6 min', delta: '-41%' },
+        { label: 'Transcription Time', value: '2.3 min', delta: '-9%' },
+        { label: 'End-to-End Latency', value: '9.5 min', delta: '-18%' }
+      ],
+      aiReliability: {
+        confidence: 0.91,
+        lowConfidenceRate: 0.08,
+        validationPassRate: 0.94,
+        hallucinationCount: 1
+      },
+      risk: {
+        highRisk: 7,
+        distribution: [
+          { label: 'Cardio', value: 3 },
+          { label: 'Respiratory', value: 2 },
+          { label: 'Neurology', value: 1 },
+          { label: 'Other', value: 1 }
+        ],
+        unresolved: 2,
+        avgReviewMins: 28
+      },
+      system: {
+        apis: [
+          { name: 'AssemblyAI', status: 'Operational' },
+          { name: 'OpenAI', status: 'Degraded (latency)' }
+        ],
+        failureRate: '1.4%',
+        retryCount: 6,
+        offlineQueue: 5,
+        uptime: '99.2%'
+      },
+      trends: [
+        { label: 'Weekly Patient Growth', value: '+12%', status: 'green' },
+        { label: 'Peak Hour Shift', value: '11AM', status: 'yellow' },
+        { label: 'Avg Consultation Trend', value: '-6%', status: 'green' },
+        { label: 'AI Accuracy Trend', value: '+4 pts', status: 'green' }
+      ]
+    };
+
+    const criticalAlertsEl = document.getElementById('criticalAlerts');
+    dashboardData.criticalAlerts.forEach(alert => {
+      const card = document.createElement('div');
+      card.className = 'panel kpi-card';
+      card.innerHTML = `
+        <div class="badge ${alert.status}">${alert.label}</div>
+        <div class="kpi-value">${alert.value}</div>
+        <p class="muted">${alert.note}</p>`;
+      criticalAlertsEl.appendChild(card);
+    });
+
+    const patientFlowCards = document.getElementById('patientFlowCards');
+    dashboardData.patientFlow.totals.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'kpi-card';
+      card.innerHTML = `<span class="muted">${item.label}</span><div class="kpi-value">${item.value}</div>`;
+      patientFlowCards.appendChild(card);
+    });
+
+    const perHour = document.getElementById('patientsPerHour');
+    const maxHour = Math.max(...dashboardData.patientFlow.perHour);
+    dashboardData.patientFlow.perHour.forEach((value, idx) => {
+      const bar = document.createElement('div');
+      bar.className = 'chart-bar';
+      bar.style.height = `${(value / maxHour) * 100}%`;
+      bar.innerHTML = `<span>${value}</span>`;
+      perHour.appendChild(bar);
+    });
+
+    const insightsList = document.getElementById('patientInsights');
+    dashboardData.patientFlow.insights.forEach(item => {
+      const li = document.createElement('li');
+      li.textContent = item;
+      insightsList.appendChild(li);
+    });
+
+    const doctorWorkload = document.getElementById('doctorWorkload');
+    dashboardData.doctorWorkload.perDoctor.forEach(doc => {
+      const row = document.createElement('div');
+      row.className = 'list-item';
+      row.innerHTML = `<strong>${doc.name}</strong><span>${doc.patients} pts • ${doc.avgTime} • AI ${doc.aiUsage}%</span>`;
+      doctorWorkload.appendChild(row);
+    });
+    const overload = document.createElement('p');
+    overload.className = 'badge red';
+    overload.textContent = `Overloaded: ${dashboardData.doctorWorkload.overloaded.join(', ') || 'None'}`;
+    doctorWorkload.appendChild(overload);
+
+    const efficiency = document.getElementById('efficiencyMetrics');
+    dashboardData.efficiency.forEach(metric => {
+      const block = document.createElement('div');
+      block.className = 'kpi-card';
+      block.innerHTML = `
+        <span class="muted">${metric.label}</span>
+        <div class="kpi-value">${metric.value}</div>
+        <span class="badge green">${metric.delta}</span>`;
+      efficiency.appendChild(block);
+    });
+
+    const aiReliability = document.getElementById('aiReliability');
+    aiReliability.innerHTML = `
+      <div class="kpi-card">
+        <span class="muted">Avg Confidence</span>
+        <div class="kpi-value">${(dashboardData.aiReliability.confidence * 100).toFixed(0)}%</div>
+        <div class="trend-bar"><span style="width:${dashboardData.aiReliability.confidence * 100}%"></span></div>
+      </div>
+      <div class="list-item"><span>Low Confidence Cases</span><strong>${(dashboardData.aiReliability.lowConfidenceRate * 100).toFixed(1)}%</strong></div>
+      <div class="list-item"><span>Validation Pass Rate</span><strong>${(dashboardData.aiReliability.validationPassRate * 100).toFixed(0)}%</strong></div>
+      <div class="list-item"><span>Hallucination Flags</span><strong>${dashboardData.aiReliability.hallucinationCount}</strong></div>`;
+
+    const riskMonitoring = document.getElementById('riskMonitoring');
+    riskMonitoring.innerHTML = `
+      <div class="list-item"><span>High Risk Cases Today</span><strong>${dashboardData.risk.highRisk}</strong></div>
+      <div class="list-item"><span>Unresolved Cases</span><strong>${dashboardData.risk.unresolved}</strong></div>
+      <div class="list-item"><span>Avg Review Time</span><strong>${dashboardData.risk.avgReviewMins} mins</strong></div>
+      <div class="divider"></div>`;
+    dashboardData.risk.distribution.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'list-item';
+      row.innerHTML = `<span>${item.label}</span><strong>${item.value}</strong>`;
+      riskMonitoring.appendChild(row);
+    });
+
+    const systemHealth = document.getElementById('systemHealth');
+    dashboardData.system.apis.forEach(api => {
+      const row = document.createElement('div');
+      row.className = 'list-item';
+      row.innerHTML = `<span>${api.name}</span><strong>${api.status}</strong>`;
+      systemHealth.appendChild(row);
+    });
+    systemHealth.innerHTML += `
+      <div class="divider"></div>
+      <div class="list-item"><span>Failure Rate</span><strong>${dashboardData.system.failureRate}</strong></div>
+      <div class="list-item"><span>Retry Count</span><strong>${dashboardData.system.retryCount}</strong></div>
+      <div class="list-item"><span>Offline Queue</span><strong>${dashboardData.system.offlineQueue}</strong></div>
+      <div class="list-item"><span>Uptime</span><strong>${dashboardData.system.uptime}</strong></div>`;
+
+    const trendCards = document.getElementById('trendCards');
+    dashboardData.trends.forEach(trend => {
+      const card = document.createElement('div');
+      card.className = 'kpi-card';
+      card.innerHTML = `<span class="muted">${trend.label}</span><div class="kpi-value">${trend.value}</div><span class="badge ${trend.status}">${trend.status === 'green' ? 'Positive' : 'Attention'}</span>`;
+      trendCards.appendChild(card);
+    });
+  </script>
+</body>
+</html>

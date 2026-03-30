@@ -25,6 +25,7 @@
       max-width: 960px;
       width: 100%;
       box-shadow: 0 30px 80px rgba(34, 0, 51, 0.15);
+      position: relative;
     }
     .landing-hero {
       display: flex;
@@ -100,11 +101,33 @@
       color: #475569;
       cursor: not-allowed;
     }
+
+    .dashboard-pill {
+      position: absolute;
+      top: -18px;
+      left: 24px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #111827;
+      color: #f8fafc;
+      border: none;
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      box-shadow: 0 15px 30px rgba(17,24,39,0.3);
+    }
+    .dashboard-pill span {
+      font-size: 1.1rem;
+    }
   </style>
 </head>
 <body>
   <div class="landing-wrapper">
     <div class="landing-card">
+      <button class="dashboard-pill" id="dashboardAccess"><span>📊</span>Executive Dashboard</button>
       <div class="landing-hero">
         <span class="label">Arc Health Platform</span>
         <h1>Welcome to the AI Medical Scribe Suite</h1>
@@ -130,5 +153,19 @@
       </div>
     </div>
   </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('dashboardAccess');
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        const code = prompt('Enter dashboard code');
+        if (code === '2005') {
+          window.location.href = 'dashboard.html';
+        } else {
+          alert('Access denied: incorrect code');
+        }
+      });
+    });
+  </script>
 </body>
 </html>
