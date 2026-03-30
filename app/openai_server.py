@@ -9,9 +9,11 @@ Reads OPENAI_API_KEY from environment or .env.
 import os
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
+from collections import Counter, defaultdict
+from statistics import mean, median
 from pydub import AudioSegment
-from typing import Optional, List
+from typing import Optional, List, Dict
 from dotenv import load_dotenv
 # Force reload environment variables to get latest values
 load_dotenv(override=True)
@@ -37,6 +39,7 @@ from app.database import (
     get_patient_with_history,
     get_consultation_by_id,
     generate_next_uhid,
+    get_connection,
 )
 
 # Import symptom extraction pipeline
@@ -83,6 +86,14 @@ SUMMARY_HEADERS = [
     'NEXT VISIT / FOLLOW-UP',
     'NEXT INVESTIGATIONS TO BE DONE',
 ]
+
+
+def _safe_mean(values: List[float]) -> float:
+    return float(mean(values)) if values else 0.0
+
+
+def _safe_median(values: List[float]) -> float:
+    return float(median(values)) if values else 0.0
 
 
 def extract_summary_section(summary_text: Optional[str], header: str) -> List[str]:
@@ -158,6 +169,325 @@ def validate_summary_against_symptoms(summary_text: Optional[str], symptom_data:
         'missing_symptoms': missing_symptoms,
         'unmatched_summary_items': unmatched_summary_items,
         'checked_section': 'CHIEF COMPLAINTS',
+    }
+
+
+def _load_consultations_with_context() -> List[Dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT c.*, d.name AS doctor_name, d.department AS doctor_department,
+                   p.name AS patient_name, p.uhid AS patient_uhid
+            FROM consultations c
+            LEFT JOIN doctors d ON c.doctor_id = d.id
+            LEFT JOIN patients p ON c.patient_id = p.id
+            """
+        ).fetchall()
+
+    consultations: List[Dict] = []
+    for row in rows:
+        visit_dt = _parse_visit_datetime(row['visit_datetime']) if row['visit_datetime'] else None
+        created_dt = None
+        if row['created_at']:
+            try:
+                created_dt = datetime.fromisoformat(row['created_at'])
+            except Exception:
+                created_dt = None
+        try:
+            symptoms_present = json.loads(row['symptoms_present'] or '[]')
+        except Exception:
+            symptoms_present = []
+        try:
+            unknown_mentions = json.loads(row['unknown_mentions'] or '[]')
+        except Exception:
+            unknown_mentions = []
+
+        consultations.append({
+            'id': row['id'],
+            'doctor_id': row['doctor_id'],
+            'doctor_name': row['doctor_name'] or 'Unknown Doctor',
+            'doctor_department': row['doctor_department'],
+            'patient_id': row['patient_id'],
+            'patient_name': row['patient_name'] or 'Unknown Patient',
+            'patient_uhid': row['patient_uhid'],
+            'visit_dt': visit_dt,
+            'visit_date': visit_dt.date() if visit_dt else None,
+            'symptoms_present': symptoms_present,
+            'unknown_mentions': unknown_mentions,
+            'symptom_count': row['symptom_count'] or 0,
+            'summary': row['summary_text'],
+            'transcript_length': row['transcript_length'] or 0,
+            'audio_path': row['audio_path'],
+            'created_dt': created_dt,
+        })
+    return consultations
+
+
+def compute_dashboard_metrics() -> Dict:
+    consultations = _load_consultations_with_context()
+    now = datetime.utcnow()
+    today = now.date()
+    seven_days_ago = today - timedelta(days=6)
+    previous_week_start = today - timedelta(days=13)
+    previous_week_end = today - timedelta(days=7)
+
+    total_consults = len(consultations)
+    high_risk_threshold = 4
+    high_risk_cases = 0
+    high_risk_today = 0
+    validation_pass = 0
+    validation_fail = 0
+    validation_evaluations = 0
+    unknown_case_count = 0
+    pending_summaries = 0
+    patients_today: set = set()
+    completed_today = 0
+    pending_today = 0
+    unique_doctors_today: set = set()
+    patients_per_hour = Counter()
+    doc_delay_minutes: List[float] = []
+    transcript_lengths: List[int] = []
+    summary_lengths: List[int] = []
+    symptom_counts: List[int] = []
+    risk_distribution = Counter()
+    counts_by_date = defaultdict(int)
+    symptoms_by_date = defaultdict(list)
+    patient_first_visit: Dict[int, Optional[datetime]] = {}
+    patient_consult_counts = Counter()
+    doctor_stats: Dict[str, Dict] = {}
+    audio_records = 0
+    latest_visit: Optional[datetime] = None
+
+    for entry in consultations:
+        visit_dt = entry['visit_dt']
+        visit_date = entry['visit_date']
+        symptom_count = entry['symptom_count'] or 0
+        summary = entry['summary']
+        unknown_mentions = entry['unknown_mentions'] or []
+        symptoms_present = entry['symptoms_present'] or []
+
+        if entry['patient_id'] is not None and visit_dt:
+            first_visit = patient_first_visit.get(entry['patient_id'])
+            if not first_visit or visit_dt < first_visit:
+                patient_first_visit[entry['patient_id']] = visit_dt
+        if entry['patient_id'] is not None:
+            patient_consult_counts[entry['patient_id']] += 1
+
+        if visit_dt:
+            counts_by_date[visit_date] += 1
+            symptoms_by_date[visit_date].append(symptom_count)
+            if visit_date == today:
+                patients_today.add(entry['patient_id'])
+                unique_doctors_today.add(entry['doctor_id'])
+                if summary:
+                    completed_today += 1
+                else:
+                    pending_today += 1
+                patients_per_hour[visit_dt.hour] += 1
+            if not latest_visit or visit_dt > latest_visit:
+                latest_visit = visit_dt
+
+        if summary:
+            summary_lengths.append(len(summary))
+        else:
+            pending_summaries += 1
+
+        if entry['transcript_length']:
+            transcript_lengths.append(entry['transcript_length'])
+
+        if entry['created_dt'] and visit_dt:
+            delay_minutes = max(0.0, (entry['created_dt'] - visit_dt).total_seconds() / 60)
+            doc_delay_minutes.append(delay_minutes)
+
+        symptom_counts.append(symptom_count)
+        if symptom_count >= high_risk_threshold or unknown_mentions:
+            high_risk_cases += 1
+            if visit_date == today:
+                high_risk_today += 1
+        if unknown_mentions:
+            unknown_case_count += 1
+
+        if summary and symptoms_present:
+            symptom_payload = {'symptoms_present': symptoms_present}
+            validation = validate_summary_against_symptoms(summary, symptom_payload)
+            validation_evaluations += 1
+            if validation['is_valid']:
+                validation_pass += 1
+            else:
+                validation_fail += 1
+
+        for symptom in symptoms_present:
+            name = symptom.get('name')
+            if name:
+                risk_distribution[name] += 1
+
+        doc_key = entry['doctor_id'] if entry['doctor_id'] is not None else f"anon_{entry['doctor_name']}"
+        stats = doctor_stats.setdefault(doc_key, {
+            'name': entry['doctor_name'],
+            'department': entry['doctor_department'],
+            'patients': 0,
+            'symptom_counts': [],
+            'last_visit': None,
+        })
+        stats['patients'] += 1
+        stats['symptom_counts'].append(symptom_count)
+        if visit_dt and (not stats['last_visit'] or visit_dt > stats['last_visit']):
+            stats['last_visit'] = visit_dt
+
+        if entry['audio_path']:
+            audio_records += 1
+
+    patients_per_hour_list = [
+        {'hour': hour, 'count': count}
+        for hour, count in sorted(patients_per_hour.items())
+    ]
+
+    insights: List[str] = []
+    if patients_per_hour_list:
+        peak_hour = max(patients_per_hour_list, key=lambda item: item['count'])
+        insights.append(f"Peak at {peak_hour['hour']:02d}:00 with {peak_hour['count']} visits")
+    if pending_today:
+        insights.append(f"{pending_today} visits awaiting summary completion")
+    if high_risk_today:
+        insights.append(f"{high_risk_today} high-risk consultations today")
+
+    per_doctor = []
+    for stats in doctor_stats.values():
+        per_doctor.append({
+            'name': stats['name'],
+            'department': stats['department'],
+            'patients': stats['patients'],
+            'avg_symptoms': round(_safe_mean(stats['symptom_counts']), 1),
+            'last_visit': stats['last_visit'].isoformat() if stats['last_visit'] else None,
+        })
+    per_doctor.sort(key=lambda item: item['patients'], reverse=True)
+
+    overload_threshold = 10
+    overloaded_doctors = [doc['name'] for doc in per_doctor if doc['patients'] >= overload_threshold]
+
+    total_symptom_counts = [count for count in symptom_counts if count is not None]
+    avg_symptom_value = round(_safe_mean(total_symptom_counts), 1) if total_symptom_counts else 0.0
+
+    doc_delay_avg = round(_safe_mean(doc_delay_minutes), 1) if doc_delay_minutes else 0.0
+    doc_delay_median = round(_safe_median(doc_delay_minutes), 1) if doc_delay_minutes else 0.0
+    avg_transcript_chars = round(_safe_mean(transcript_lengths), 0) if transcript_lengths else 0.0
+    avg_summary_chars = round(_safe_mean(summary_lengths), 0) if summary_lengths else 0.0
+
+    validation_pass_rate = (
+        validation_pass / validation_evaluations if validation_evaluations else None
+    )
+
+    risk_distribution_list = [
+        {'label': label, 'value': value}
+        for label, value in risk_distribution.most_common(5)
+    ]
+
+    last_seven_days_counts = []
+    total_last_7 = 0
+    for offset in range(6, -1, -1):
+        day = today - timedelta(days=offset)
+        count = counts_by_date.get(day, 0)
+        total_last_7 += count
+        last_seven_days_counts.append({'date': day.isoformat(), 'count': count})
+
+    previous_week_total = 0
+    for offset in range(13, 6, -1):
+        day = today - timedelta(days=offset)
+        previous_week_total += counts_by_date.get(day, 0)
+
+    symptom_values_7d = []
+    for offset in range(6, -1, -1):
+        day = today - timedelta(days=offset)
+        symptom_values_7d.extend(symptoms_by_date.get(day, []))
+    avg_symptom_7d = round(_safe_mean(symptom_values_7d), 1) if symptom_values_7d else 0.0
+
+    new_patients_last_7 = sum(
+        1 for visit in patient_first_visit.values()
+        if visit and visit.date() >= seven_days_ago
+    )
+
+    unique_patients = len(patient_consult_counts)
+    repeat_patients = sum(1 for count in patient_consult_counts.values() if count > 1)
+    repeat_rate = (repeat_patients / unique_patients) if unique_patients else 0
+
+    trends_cards = [
+        {
+            'label': '7-Day Consultations',
+            'value': total_last_7,
+            'status': 'green' if total_last_7 >= previous_week_total else 'yellow'
+        },
+        {
+            'label': 'New Patients (7d)',
+            'value': new_patients_last_7,
+            'status': 'green'
+        },
+        {
+            'label': 'Avg Symptoms (7d)',
+            'value': f"{avg_symptom_7d:.1f}",
+            'status': 'green'
+        },
+        {
+            'label': 'Repeat Patient Rate',
+            'value': f"{repeat_rate * 100:.0f}%",
+            'status': 'green' if repeat_rate <= 0.5 else 'yellow'
+        }
+    ]
+
+    high_risk_cases_today = high_risk_today
+
+    latest_visit_iso = latest_visit.isoformat() if latest_visit else None
+    summaries_count = len(summary_lengths)
+
+    return {
+        'generated_at': now.isoformat(),
+        'critical_alerts': {
+            'high_risk_cases': high_risk_cases,
+            'validation_failures': validation_fail,
+            'pending_summaries': pending_summaries,
+            'unknown_mention_cases': unknown_case_count,
+        },
+        'patient_flow': {
+            'patients_today': len([pid for pid in patients_today if pid is not None]),
+            'completed_today': completed_today,
+            'pending_today': pending_today,
+            'unique_doctors_today': len([doc for doc in unique_doctors_today if doc is not None]),
+            'avg_symptom_count': avg_symptom_value,
+            'patients_per_hour': patients_per_hour_list,
+            'insights': insights,
+        },
+        'doctor_workload': {
+            'per_doctor': per_doctor,
+            'overloaded': overloaded_doctors,
+        },
+        'efficiency': {
+            'avg_doc_delay_minutes': doc_delay_avg,
+            'median_doc_delay_minutes': doc_delay_median,
+            'avg_transcript_chars': avg_transcript_chars,
+            'avg_summary_chars': avg_summary_chars,
+        },
+        'ai_reliability': {
+            'validation_pass_rate': validation_pass_rate,
+            'validation_evaluations': validation_evaluations,
+            'validation_failures': validation_fail,
+            'unknown_case_rate': (unknown_case_count / total_consults) if total_consults else 0,
+        },
+        'risk_monitoring': {
+            'high_risk_today': high_risk_cases_today,
+            'risk_distribution': risk_distribution_list,
+            'unresolved_unknowns': unknown_case_count,
+        },
+        'system_health': {
+            'openai_api': bool(OPENAI_KEY),
+            'assemblyai_api': bool(ASSEMBLYAI_KEY),
+            'summary_coverage': (summaries_count / total_consults) if total_consults else None,
+            'audio_records': audio_records,
+            'last_consultation': latest_visit_iso,
+            'consultation_count': total_consults,
+        },
+        'trends': {
+            'patients_last_7_days': last_seven_days_counts,
+            'trends_cards': trends_cards,
+        }
     }
 
 
@@ -1056,6 +1386,14 @@ def get_unknown_symptoms():
         'unknown_mentions': last_symptom_extraction.get('unknown_mentions', []),
         'count': last_symptom_extraction.get('unknown_count', 0)
     }
+
+
+@app.get('/dashboard_metrics')
+def dashboard_metrics():
+    try:
+        return compute_dashboard_metrics()
+    except Exception as exc:
+        return JSONResponse({'error': f'Unable to build dashboard metrics: {exc}'}, status_code=500)
 
 
 # ==================== Database CRUD Endpoints ====================

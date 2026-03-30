@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arc Health Admin Control Room</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #050819;
+      --panel: rgba(12,20,38,0.92);
+      --panel-alt: rgba(12,20,38,0.65);
+      --accent: #60a5fa;
+      --accent-strong: #38bdf8;
+      --yellow: #fbbf24;
+      --green: #4ade80;
+      --danger: #f87171;
+      --border: rgba(255,255,255,0.08);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 32px 20px 48px;
+    }
+    .admin-shell {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 2.8rem);
+    }
+    header p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .ghost-btn {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 10px 16px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color 0.2s ease, color 0.2s ease;
+    }
+    .ghost-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 20px 45px rgba(2,6,23,0.5);
+    }
+    .panel h2 {
+      margin-top: 0;
+      margin-bottom: 6px;
+    }
+    .panel p.subtext {
+      margin-top: 0;
+      margin-bottom: 24px;
+      color: var(--muted);
+    }
+    .grid-two {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    form {
+      display: grid;
+      gap: 16px;
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.95rem;
+    }
+    label span {
+      color: var(--muted);
+      font-size: 0.85rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    input, select, textarea {
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(8,12,24,0.8);
+      color: var(--text);
+      font-size: 1rem;
+      font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: 2px solid var(--accent);
+      border-color: transparent;
+    }
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+    button.primary {
+      margin-top: 8px;
+      padding: 12px 18px;
+      border: none;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      color: #0f172a;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    button.primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    button.primary:not(:disabled):hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 25px rgba(56,189,248,0.3);
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: rgba(96,165,250,0.15);
+      border: 1px solid rgba(96,165,250,0.4);
+      color: var(--accent);
+    }
+    .reports {
+      margin-top: 32px;
+      display: grid;
+      gap: 20px;
+    }
+    .search-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .search-bar input {
+      flex: 1;
+      min-width: 220px;
+    }
+    .result-card {
+      margin-top: 16px;
+      background: var(--panel-alt);
+      border: 1px dashed rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 18px;
+    }
+    .result-card h3 {
+      margin-top: 0;
+    }
+    .consultations-list {
+      margin: 16px 0 0;
+      list-style: none;
+      padding-left: 0;
+      display: grid;
+      gap: 12px;
+    }
+    .consultations-list li {
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .empty-state {
+      color: var(--muted);
+      font-style: italic;
+    }
+    .toast {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      padding: 14px 18px;
+      border-radius: 12px;
+      background: rgba(8,12,24,0.9);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--text);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+      opacity: 0;
+      transform: translateY(-10px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      z-index: 10;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    @media (max-width: 640px) {
+      .panel { padding: 18px; }
+      button.primary { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-shell">
+    <header>
+      <span class="pill">Admin Control Room</span>
+      <h1>Registration & Patient Intelligence</h1>
+      <p>Capture clinician details, onboard patients, and pull UHID-linked visit reports without leaving this surface.</p>
+      <div class="actions">
+        <a class="ghost-btn" href="index.html">Back to Portal</a>
+        <a class="ghost-btn" href="dashboard.html">Executive Dashboard</a>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>1. Registration Center</h2>
+      <p class="subtext">Complete the forms below to register new doctors and patients. Required fields mirror the intake rules enforced by the APIs.</p>
+      <div class="grid-two">
+        <form id="doctorForm">
+          <h3>Doctor Profile</h3>
+          <label>
+            <span>Doctor Name *</span>
+            <input type="text" name="name" placeholder="e.g., Dr. Kavya Rao" required />
+          </label>
+          <label>
+            <span>Department *</span>
+            <input type="text" name="department" placeholder="Cardiology" required />
+          </label>
+          <label>
+            <span>Designation *</span>
+            <input type="text" name="designation" placeholder="Senior Consultant" required />
+          </label>
+          <label>
+            <span>Patient Type</span>
+            <select name="patient_type">
+              <option value="OPD" selected>OPD</option>
+              <option value="IPD">IPD</option>
+              <option value="Emergency">Emergency</option>
+            </select>
+          </label>
+          <button class="primary" type="submit">Save Doctor Profile</button>
+        </form>
+
+        <form id="patientForm">
+          <h3>Patient Registration</h3>
+          <label>
+            <span>Patient Name *</span>
+            <input type="text" name="name" placeholder="Full legal name" required />
+          </label>
+          <label>
+            <span>Sex *</span>
+            <select name="sex" required>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <label>
+            <span>Age *</span>
+            <input type="number" name="age" min="0" placeholder="32" required />
+          </label>
+          <label>
+            <span>Date of Birth *</span>
+            <input type="date" name="dob" required />
+          </label>
+          <label>
+            <span>Phone</span>
+            <input type="tel" name="phone" placeholder="+91 90000 00000" />
+          </label>
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" placeholder="patient@domain.com" />
+          </label>
+          <label>
+            <span>Unit / Suite</span>
+            <input type="text" name="unit_suite" placeholder="Apt 12B" />
+          </label>
+          <label>
+            <span>Street *</span>
+            <input type="text" name="street" placeholder="221B Residency Road" required />
+          </label>
+          <label>
+            <span>City *</span>
+            <input type="text" name="city" placeholder="Bengaluru" required />
+          </label>
+          <label>
+            <span>Province / State *</span>
+            <input type="text" name="province" placeholder="Karnataka" required />
+          </label>
+          <label>
+            <span>Postal Code *</span>
+            <input type="text" name="postal_code" placeholder="560001" required />
+          </label>
+          <label>
+            <span>Additional Address</span>
+            <textarea name="address" placeholder="Any extra directions or notes"></textarea>
+          </label>
+          <label>
+            <span>Existing UHID (for updates)</span>
+            <input type="text" name="existing_uhid" placeholder="Leave blank for new UHID" />
+          </label>
+          <button class="primary" type="submit">Save Patient Record</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel reports">
+      <div>
+        <h2>2. Patient Reports</h2>
+        <p class="subtext">Search using UHID to view demographics, visit counts, and consultation history pulled directly from the database.</p>
+      </div>
+      <div class="search-bar">
+        <input type="text" id="uhidSearch" placeholder="Enter UHID e.g., AIMS00012" />
+        <button class="primary" id="searchBtn" type="button">Search UHID</button>
+      </div>
+      <div id="reportResults" class="result-card empty-state">
+        Enter a UHID above to load patient details.
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const toastEl = document.getElementById('toast');
+    let toastTimer;
+
+    function showToast(message, tone = 'info') {
+      clearTimeout(toastTimer);
+      toastEl.textContent = message;
+      toastEl.style.borderColor = tone === 'error' ? 'rgba(248,113,113,0.9)' : 'rgba(96,165,250,0.8)';
+      toastEl.classList.add('show');
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 4000);
+    }
+
+    async function postForm(url, formEl, button) {
+      const formData = new FormData(formEl);
+      button.disabled = true;
+      try {
+        const response = await fetch(url, { method: 'POST', body: formData });
+        const data = await response.json();
+        if (!response.ok || data.error) {
+          throw new Error(data.error || 'Request failed');
+        }
+        showToast('Saved successfully');
+        formEl.reset();
+        return data;
+      } catch (err) {
+        showToast(err.message, 'error');
+        throw err;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    function renderReport(data) {
+      const container = document.getElementById('reportResults');
+      container.classList.remove('empty-state');
+      const patient = data.patient || {};
+      const consultations = data.consultations || [];
+      const followUps = data.follow_up_questions || [];
+
+      const consultItems = consultations.length
+        ? consultations.map(item => {
+            const visit = item.visit_datetime || item.visitDateTime || 'Unknown date';
+            const summary = item.summary ? item.summary.slice(0, 160) + (item.summary.length > 160 ? '…' : '') : 'Summary pending';
+            return `<li>
+              <strong>${visit}</strong><br/>
+              <span>${summary}</span>
+            </li>`;
+          }).join('')
+        : '<li>No consultations recorded.</li>';
+
+      const followUpBlock = followUps.length
+        ? `<div style="margin-top:14px;">
+            <strong>Suggested follow-up questions:</strong>
+            <ul style="margin:8px 0 0 18px;">
+              ${followUps.map(q => `<li>${q}</li>`).join('')}
+            </ul>
+          </div>`
+        : '';
+
+      container.innerHTML = `
+        <h3>${patient.name || 'Unknown Patient'} <span style="color:var(--muted); font-weight:400;">${patient.uhid || ''}</span></h3>
+        <p style="margin:0 0 4px; color:var(--muted);">Age ${patient.age || 'N/A'} • ${patient.sex || 'N/A'} • ${patient.city || ''}</p>
+        <p style="margin:0 0 12px;">Consultations logged: ${consultations.length}</p>
+        <div>
+          <strong>Recent consultations</strong>
+          <ul class="consultations-list">${consultItems}</ul>
+        </div>
+        ${followUpBlock}
+      `;
+    }
+
+    async function searchPatient() {
+      const input = document.getElementById('uhidSearch');
+      const value = (input.value || '').trim();
+      if (!value) {
+        showToast('Please enter a UHID', 'error');
+        return;
+      }
+      const results = document.getElementById('reportResults');
+      results.classList.add('empty-state');
+      results.textContent = 'Searching...';
+      try {
+        const res = await fetch(`/patients/${encodeURIComponent(value)}`);
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || 'Patient not found');
+        }
+        renderReport(data);
+      } catch (err) {
+        results.textContent = err.message;
+        showToast(err.message, 'error');
+      }
+    }
+
+    document.getElementById('doctorForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const button = e.currentTarget.querySelector('button[type="submit"]');
+      postForm('/doctors', e.currentTarget, button);
+    });
+
+    document.getElementById('patientForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const button = e.currentTarget.querySelector('button[type="submit"]');
+      postForm('/patients', e.currentTarget, button);
+    });
+
+    document.getElementById('searchBtn').addEventListener('click', searchPatient);
+    document.getElementById('uhidSearch').addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') {
+        searchPatient();
+      }
+    });
+  </script>
+</body>
+</html>

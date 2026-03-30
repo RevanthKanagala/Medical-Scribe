@@ -87,6 +87,7 @@
     .badge.red {background:#fee2e2;color:#991b1b;}
     .badge.yellow {background:#fef3c7;color:#92400e;}
     .badge.green {background:#d1fae5;color:#065f46;}
+    .badge.gray {background:#e2e8f0;color:#1f2937;}
     .trend-bar {
       height: 6px;
       border-radius: 999px;
@@ -138,7 +139,10 @@
 <body>
   <div class="dashboard-shell">
     <div class="dashboard-header">
-      <h1>Hospital Command Center</h1>
+      <div>
+        <h1>Hospital Command Center</h1>
+        <p id="dashboardStatus" class="muted">Loading live metrics…</p>
+      </div>
       <a class="back-link" href="index.html">← Back to Portal</a>
     </div>
 
@@ -198,181 +202,218 @@
   </div>
 
   <script>
-    // Placeholder data. Replace with live API calls when available.
-    const dashboardData = {
-      criticalAlerts: [
-        { label: 'High Risk Cases', value: 7, status: 'red', note: 'Respiratory distress flagged' },
-        { label: 'Validation Failures', value: 3, status: 'yellow', note: 'Summary vs symptom mismatch' },
-        { label: 'Pending Transcriptions', value: 5, status: 'yellow', note: 'Queued offline jobs' },
-        { label: 'System Alerts', value: 1, status: 'red', note: 'OpenAI latency spike' }
-      ],
-      patientFlow: {
-        totals: [
-          { label: 'Patients Today', value: 42 },
-          { label: 'Completed vs Pending', value: '31 / 11' },
-          { label: 'Avg Waiting (min)', value: 18 },
-          { label: 'Bottleneck Alerts', value: 'Triage 2' }
-        ],
-        perHour: [5, 7, 9, 6, 4, 3, 8],
-        insights: [
-          'Peak between 10AM-12PM',
-          'Triage queue reached 85% capacity',
-          'Discharge time improved by 12%'
-        ]
-      },
-      doctorWorkload: {
-        perDoctor: [
-          { name: 'Dr. Rao', patients: 9, avgTime: '11 min', aiUsage: 92 },
-          { name: 'Dr. Singh', patients: 14, avgTime: '15 min', aiUsage: 65 },
-          { name: 'Dr. Patel', patients: 6, avgTime: '9 min', aiUsage: 88 }
-        ],
-        overloaded: ['Dr. Singh']
-      },
-      efficiency: [
-        { label: 'Time Saved Today', value: '3.4 hrs', delta: '+14%' },
-        { label: 'Documentation Time', value: '6 min', delta: '-41%' },
-        { label: 'Transcription Time', value: '2.3 min', delta: '-9%' },
-        { label: 'End-to-End Latency', value: '9.5 min', delta: '-18%' }
-      ],
-      aiReliability: {
-        confidence: 0.91,
-        lowConfidenceRate: 0.08,
-        validationPassRate: 0.94,
-        hallucinationCount: 1
-      },
-      risk: {
-        highRisk: 7,
-        distribution: [
-          { label: 'Cardio', value: 3 },
-          { label: 'Respiratory', value: 2 },
-          { label: 'Neurology', value: 1 },
-          { label: 'Other', value: 1 }
-        ],
-        unresolved: 2,
-        avgReviewMins: 28
-      },
-      system: {
-        apis: [
-          { name: 'AssemblyAI', status: 'Operational' },
-          { name: 'OpenAI', status: 'Degraded (latency)' }
-        ],
-        failureRate: '1.4%',
-        retryCount: 6,
-        offlineQueue: 5,
-        uptime: '99.2%'
-      },
-      trends: [
-        { label: 'Weekly Patient Growth', value: '+12%', status: 'green' },
-        { label: 'Peak Hour Shift', value: '11AM', status: 'yellow' },
-        { label: 'Avg Consultation Trend', value: '-6%', status: 'green' },
-        { label: 'AI Accuracy Trend', value: '+4 pts', status: 'green' }
-      ]
-    };
-
+    const statusEl = document.getElementById('dashboardStatus');
     const criticalAlertsEl = document.getElementById('criticalAlerts');
-    dashboardData.criticalAlerts.forEach(alert => {
-      const card = document.createElement('div');
-      card.className = 'panel kpi-card';
-      card.innerHTML = `
-        <div class="badge ${alert.status}">${alert.label}</div>
-        <div class="kpi-value">${alert.value}</div>
-        <p class="muted">${alert.note}</p>`;
-      criticalAlertsEl.appendChild(card);
-    });
+    const patientFlowCardsEl = document.getElementById('patientFlowCards');
+    const patientsPerHourEl = document.getElementById('patientsPerHour');
+    const patientInsightsEl = document.getElementById('patientInsights');
+    const doctorWorkloadEl = document.getElementById('doctorWorkload');
+    const efficiencyEl = document.getElementById('efficiencyMetrics');
+    const aiReliabilityEl = document.getElementById('aiReliability');
+    const riskMonitoringEl = document.getElementById('riskMonitoring');
+    const systemHealthEl = document.getElementById('systemHealth');
+    const trendCardsEl = document.getElementById('trendCards');
 
-    const patientFlowCards = document.getElementById('patientFlowCards');
-    dashboardData.patientFlow.totals.forEach(item => {
-      const card = document.createElement('div');
-      card.className = 'kpi-card';
-      card.innerHTML = `<span class="muted">${item.label}</span><div class="kpi-value">${item.value}</div>`;
-      patientFlowCards.appendChild(card);
-    });
+    const formatHour = (hour) => `${String(hour).padStart(2, '0')}:00`;
 
-    const perHour = document.getElementById('patientsPerHour');
-    const maxHour = Math.max(...dashboardData.patientFlow.perHour);
-    dashboardData.patientFlow.perHour.forEach((value, idx) => {
-      const bar = document.createElement('div');
-      bar.className = 'chart-bar';
-      bar.style.height = `${(value / maxHour) * 100}%`;
-      bar.innerHTML = `<span>${value}</span>`;
-      perHour.appendChild(bar);
-    });
+    function renderCriticalAlerts(alerts) {
+      criticalAlertsEl.innerHTML = '';
+      const configs = [
+        { label: 'High Risk Cases', value: alerts.high_risk_cases ?? 0, status: 'red', note: 'Symptom load ≥4' },
+        { label: 'Validation Warnings', value: alerts.validation_failures ?? 0, status: 'yellow', note: 'Summary vs symptom mismatch' },
+        { label: 'Pending Summaries', value: alerts.pending_summaries ?? 0, status: 'yellow', note: 'Transcripts awaiting summaries' },
+        { label: 'Unknown Mentions', value: alerts.unknown_mention_cases ?? 0, status: 'red', note: 'Needs review' }
+      ];
+      configs.forEach(alert => {
+        const card = document.createElement('div');
+        card.className = 'panel kpi-card';
+        card.innerHTML = `
+          <div class="badge ${alert.status}">${alert.label}</div>
+          <div class="kpi-value">${alert.value}</div>
+          <p class="muted">${alert.note}</p>`;
+        criticalAlertsEl.appendChild(card);
+      });
+    }
 
-    const insightsList = document.getElementById('patientInsights');
-    dashboardData.patientFlow.insights.forEach(item => {
-      const li = document.createElement('li');
-      li.textContent = item;
-      insightsList.appendChild(li);
-    });
+    function renderPatientFlow(flow) {
+      patientFlowCardsEl.innerHTML = '';
+      const cards = [
+        { label: 'Patients Today', value: flow.patients_today ?? 0 },
+        { label: 'Completed vs Pending', value: `${flow.completed_today ?? 0} / ${flow.pending_today ?? 0}` },
+        { label: 'Avg Symptom Count', value: (flow.avg_symptom_count ?? 0).toFixed(1) },
+        { label: 'Active Doctors', value: flow.unique_doctors_today ?? 0 }
+      ];
+      cards.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'kpi-card';
+        card.innerHTML = `<span class="muted">${item.label}</span><div class="kpi-value">${item.value}</div>`;
+        patientFlowCardsEl.appendChild(card);
+      });
 
-    const doctorWorkload = document.getElementById('doctorWorkload');
-    dashboardData.doctorWorkload.perDoctor.forEach(doc => {
-      const row = document.createElement('div');
-      row.className = 'list-item';
-      row.innerHTML = `<strong>${doc.name}</strong><span>${doc.patients} pts • ${doc.avgTime} • AI ${doc.aiUsage}%</span>`;
-      doctorWorkload.appendChild(row);
-    });
-    const overload = document.createElement('p');
-    overload.className = 'badge red';
-    overload.textContent = `Overloaded: ${dashboardData.doctorWorkload.overloaded.join(', ') || 'None'}`;
-    doctorWorkload.appendChild(overload);
+      patientsPerHourEl.innerHTML = '';
+      const perHour = flow.patients_per_hour || [];
+      const maxValue = perHour.reduce((max, item) => Math.max(max, item.count), 0) || 1;
+      if (!perHour.length) {
+        patientsPerHourEl.innerHTML = '<p class="muted">No consults logged today.</p>';
+      } else {
+        perHour.forEach(item => {
+          const bar = document.createElement('div');
+          bar.className = 'chart-bar';
+          bar.style.height = `${(item.count / maxValue) * 100}%`;
+          bar.innerHTML = `<span>${item.count}</span>`;
+          bar.title = `${formatHour(item.hour)} • ${item.count} patients`;
+          patientsPerHourEl.appendChild(bar);
+        });
+      }
 
-    const efficiency = document.getElementById('efficiencyMetrics');
-    dashboardData.efficiency.forEach(metric => {
-      const block = document.createElement('div');
-      block.className = 'kpi-card';
-      block.innerHTML = `
-        <span class="muted">${metric.label}</span>
-        <div class="kpi-value">${metric.value}</div>
-        <span class="badge green">${metric.delta}</span>`;
-      efficiency.appendChild(block);
-    });
+      patientInsightsEl.innerHTML = '';
+      (flow.insights || ['No operational alerts today.']).forEach(text => {
+        const li = document.createElement('li');
+        li.textContent = text;
+        patientInsightsEl.appendChild(li);
+      });
+    }
 
-    const aiReliability = document.getElementById('aiReliability');
-    aiReliability.innerHTML = `
-      <div class="kpi-card">
-        <span class="muted">Avg Confidence</span>
-        <div class="kpi-value">${(dashboardData.aiReliability.confidence * 100).toFixed(0)}%</div>
-        <div class="trend-bar"><span style="width:${dashboardData.aiReliability.confidence * 100}%"></span></div>
-      </div>
-      <div class="list-item"><span>Low Confidence Cases</span><strong>${(dashboardData.aiReliability.lowConfidenceRate * 100).toFixed(1)}%</strong></div>
-      <div class="list-item"><span>Validation Pass Rate</span><strong>${(dashboardData.aiReliability.validationPassRate * 100).toFixed(0)}%</strong></div>
-      <div class="list-item"><span>Hallucination Flags</span><strong>${dashboardData.aiReliability.hallucinationCount}</strong></div>`;
+    function renderDoctorWorkload(workload) {
+      doctorWorkloadEl.innerHTML = '';
+      (workload.per_doctor || []).forEach(doc => {
+        const row = document.createElement('div');
+        row.className = 'list-item';
+        row.innerHTML = `<strong>${doc.name}</strong><span>${doc.patients} pts • avg symptoms ${doc.avg_symptoms ?? 0}</span>`;
+        doctorWorkloadEl.appendChild(row);
+      });
+      if (!workload.per_doctor || !workload.per_doctor.length) {
+        doctorWorkloadEl.innerHTML = '<p class="muted">No consultations recorded yet.</p>';
+      }
+      if (workload.overloaded && workload.overloaded.length) {
+        const alert = document.createElement('p');
+        alert.className = 'badge red';
+        alert.textContent = `Overloaded doctors: ${workload.overloaded.join(', ')}`;
+        doctorWorkloadEl.appendChild(alert);
+      }
+    }
 
-    const riskMonitoring = document.getElementById('riskMonitoring');
-    riskMonitoring.innerHTML = `
-      <div class="list-item"><span>High Risk Cases Today</span><strong>${dashboardData.risk.highRisk}</strong></div>
-      <div class="list-item"><span>Unresolved Cases</span><strong>${dashboardData.risk.unresolved}</strong></div>
-      <div class="list-item"><span>Avg Review Time</span><strong>${dashboardData.risk.avgReviewMins} mins</strong></div>
-      <div class="divider"></div>`;
-    dashboardData.risk.distribution.forEach(item => {
-      const row = document.createElement('div');
-      row.className = 'list-item';
-      row.innerHTML = `<span>${item.label}</span><strong>${item.value}</strong>`;
-      riskMonitoring.appendChild(row);
-    });
+    function renderEfficiency(eff) {
+      efficiencyEl.innerHTML = '';
+      const cards = [
+        { label: 'Avg Documentation Lag (min)', value: eff.avg_doc_delay_minutes?.toFixed(1) ?? '0' },
+        { label: 'Median Lag (min)', value: eff.median_doc_delay_minutes?.toFixed(1) ?? '0' },
+        { label: 'Avg Transcript Length', value: `${eff.avg_transcript_chars ?? 0} chars` },
+        { label: 'Avg Summary Length', value: `${eff.avg_summary_chars ?? 0} chars` }
+      ];
+      cards.forEach(metric => {
+        const block = document.createElement('div');
+        block.className = 'kpi-card';
+        block.innerHTML = `<span class="muted">${metric.label}</span><div class="kpi-value">${metric.value}</div>`;
+        efficiencyEl.appendChild(block);
+      });
+    }
 
-    const systemHealth = document.getElementById('systemHealth');
-    dashboardData.system.apis.forEach(api => {
-      const row = document.createElement('div');
-      row.className = 'list-item';
-      row.innerHTML = `<span>${api.name}</span><strong>${api.status}</strong>`;
-      systemHealth.appendChild(row);
-    });
-    systemHealth.innerHTML += `
-      <div class="divider"></div>
-      <div class="list-item"><span>Failure Rate</span><strong>${dashboardData.system.failureRate}</strong></div>
-      <div class="list-item"><span>Retry Count</span><strong>${dashboardData.system.retryCount}</strong></div>
-      <div class="list-item"><span>Offline Queue</span><strong>${dashboardData.system.offlineQueue}</strong></div>
-      <div class="list-item"><span>Uptime</span><strong>${dashboardData.system.uptime}</strong></div>`;
+    function renderAiReliability(ai) {
+      aiReliabilityEl.innerHTML = '';
+      if (!ai || !ai.validation_evaluations) {
+        aiReliabilityEl.innerHTML = '<p class="muted">No validation data yet.</p>';
+        return;
+      }
+      const passRate = ai.validation_pass_rate != null ? `${(ai.validation_pass_rate * 100).toFixed(0)}%` : 'N/A';
+      const unknownRate = ai.unknown_case_rate != null ? `${(ai.unknown_case_rate * 100).toFixed(1)}%` : 'N/A';
+      aiReliabilityEl.innerHTML = `
+        <div class="kpi-card">
+          <span class="muted">Validation Pass Rate</span>
+          <div class="kpi-value">${passRate}</div>
+          <div class="trend-bar"><span style="width:${(ai.validation_pass_rate || 0) * 100}%"></span></div>
+        </div>
+        <div class="list-item"><span>Evaluated Summaries</span><strong>${ai.validation_evaluations}</strong></div>
+        <div class="list-item"><span>Failures</span><strong>${ai.validation_failures}</strong></div>
+        <div class="list-item"><span>Unknown Symptom Rate</span><strong>${unknownRate}</strong></div>`;
+    }
 
-    const trendCards = document.getElementById('trendCards');
-    dashboardData.trends.forEach(trend => {
-      const card = document.createElement('div');
-      card.className = 'kpi-card';
-      card.innerHTML = `<span class="muted">${trend.label}</span><div class="kpi-value">${trend.value}</div><span class="badge ${trend.status}">${trend.status === 'green' ? 'Positive' : 'Attention'}</span>`;
-      trendCards.appendChild(card);
-    });
+    function renderRiskMonitoring(risk) {
+      riskMonitoringEl.innerHTML = '';
+      const rows = [
+        { label: 'High Risk Today', value: risk.high_risk_today ?? 0 },
+        { label: 'Unresolved Unknowns', value: risk.unresolved_unknowns ?? 0 }
+      ];
+      rows.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'list-item';
+        row.innerHTML = `<span>${item.label}</span><strong>${item.value}</strong>`;
+        riskMonitoringEl.appendChild(row);
+      });
+      if (risk.risk_distribution && risk.risk_distribution.length) {
+        const divider = document.createElement('div');
+        divider.className = 'divider';
+        riskMonitoringEl.appendChild(divider);
+        risk.risk_distribution.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'list-item';
+          row.innerHTML = `<span>${item.label}</span><strong>${item.value}</strong>`;
+          riskMonitoringEl.appendChild(row);
+        });
+      }
+    }
+
+    function renderSystemHealth(health) {
+      systemHealthEl.innerHTML = '';
+      const rows = [
+        { label: 'OpenAI API', value: health.openai_api ? 'Operational' : 'Missing Key' },
+        { label: 'AssemblyAI API', value: health.assemblyai_api ? 'Operational' : 'Missing Key' },
+        { label: 'Summary Coverage', value: health.summary_coverage != null ? `${(health.summary_coverage * 100).toFixed(0)}%` : 'N/A' },
+        { label: 'Audio Records', value: health.audio_records ?? 0 },
+        { label: 'Consultations in DB', value: health.consultation_count ?? 0 },
+        { label: 'Last Consultation', value: health.last_consultation ? new Date(health.last_consultation).toLocaleString() : 'N/A' }
+      ];
+      rows.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'list-item';
+        row.innerHTML = `<span>${item.label}</span><strong>${item.value}</strong>`;
+        systemHealthEl.appendChild(row);
+      });
+    }
+
+    function renderTrends(trends) {
+      trendCardsEl.innerHTML = '';
+      (trends.trends_cards || []).forEach(trend => {
+        const card = document.createElement('div');
+        const statusClass = trend.status || 'gray';
+        card.className = 'kpi-card';
+        card.innerHTML = `<span class="muted">${trend.label}</span><div class="kpi-value">${trend.value}</div><span class="badge ${statusClass}">${statusClass === 'green' ? 'Positive' : 'Attention'}</span>`;
+        trendCardsEl.appendChild(card);
+      });
+      if (!trends.trends_cards || !trends.trends_cards.length) {
+        trendCardsEl.innerHTML = '<p class="muted">Not enough history yet.</p>';
+      }
+    }
+
+    function renderDashboard(data) {
+      renderCriticalAlerts(data.critical_alerts || {});
+      renderPatientFlow(data.patient_flow || {});
+      renderDoctorWorkload(data.doctor_workload || {});
+      renderEfficiency(data.efficiency || {});
+      renderAiReliability(data.ai_reliability || {});
+      renderRiskMonitoring(data.risk_monitoring || {});
+      renderSystemHealth(data.system_health || {});
+      renderTrends(data.trends || {});
+    }
+
+    async function loadDashboard() {
+      try {
+        if (statusEl) statusEl.textContent = 'Loading live metrics…';
+        const res = await fetch('/dashboard_metrics');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        renderDashboard(data);
+        if (statusEl) {
+          const stamp = data.generated_at ? new Date(data.generated_at).toLocaleString() : new Date().toLocaleString();
+          statusEl.textContent = `Updated ${stamp}`;
+        }
+      } catch (err) {
+        if (statusEl) statusEl.textContent = `Unable to load metrics: ${err.message}`;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadDashboard);
   </script>
 </body>
 </html>
