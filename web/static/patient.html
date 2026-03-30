@@ -38,6 +38,17 @@
         <div id="searchResult" style="margin-top:15px;"></div>
       </section>
 
+      <div id="followUpCard" class="hidden" style="background:#fff7ed;border:2px solid #dd6b20;border-radius:14px;padding:20px;margin-bottom:25px;box-shadow:0 12px 30px rgba(221,107,32,0.15);">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+          <h3 style="margin:0;color:#9c4221;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;">
+            <span>🩺</span> Follow-up Questions for Next Visit
+          </h3>
+          <span id="followUpMeta" style="font-size:13px;color:#c05621;">Last visit: --</span>
+        </div>
+        <p style="margin:12px 0 18px;color:#7b341e;font-size:14px;">Share these prompts with the doctor to ensure continuity from the previous consultation.</p>
+        <ol id="followUpList" style="margin:0;padding-left:20px;color:#2d3748;font-size:15px;line-height:1.5;"></ol>
+      </div>
+
       <div id="consultationHistory" class="hidden" style="background:#e6fffa;padding:20px;border-radius:12px;margin-bottom:25px;border:2px solid #38b2ac;">
         <h3 style="margin-bottom:15px;color:#2d3748;font-size:16px;font-weight:600;">📚 Previous Consultations</h3>
         <div id="historyList"></div>
@@ -121,7 +132,7 @@
         </div>
 
         <div class="nav-controls" style="justify-content:space-between;">
-          <a class="btn btn-upload" href="index.html"><span>←</span> Back to Doctor Info</a>
+          <a class="btn btn-upload" href="doctor.html"><span>←</span> Back to Doctor Info</a>
           <button class="btn btn-primary" type="submit"><span>→</span> Save &amp; Continue</button>
         </div>
       </form>

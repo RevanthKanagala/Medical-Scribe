@@ -11,10 +11,13 @@ import json
 from pathlib import Path
 from datetime import datetime
 from pydub import AudioSegment
-from typing import Optional
+from typing import Optional, List
 from dotenv import load_dotenv
 # Force reload environment variables to get latest values
 load_dotenv(override=True)
+
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
@@ -383,6 +386,215 @@ TRANSCRIPT:
 Note: Automated summary generation failed. Manual review required.
 Error: {str(e)}
 """
+
+
+def generate_followup_questions(
+    *,
+    transcript: Optional[str],
+    summary: Optional[str],
+    visit_datetime: Optional[str],
+    doctor_name: Optional[str],
+    doctor_department: Optional[str],
+    max_questions: int = 5,
+) -> List[str]:
+    """Create focused follow-up questions for the next visit."""
+    def _extract_section_lines(body: str, header: str) -> List[str]:
+        headers = [
+            'CHIEF COMPLAINTS',
+            'ALLERGIES',
+            'DIAGNOSIS / PRE-EXISTING DISEASES',
+            'MEDICINES PRESCRIBED',
+            'SUGGESTIONS / ADVICE',
+            'NEXT VISIT / FOLLOW-UP',
+            'NEXT INVESTIGATIONS TO BE DONE',
+        ]
+        marker = f"{header}:"
+        if marker not in body:
+            return []
+        tail = body.split(marker, 1)[1]
+        stop = len(tail)
+        for other in headers:
+            if other == header:
+                continue
+            marker_other = f"{other}:"
+            idx = tail.find(marker_other)
+            if idx != -1 and idx < stop:
+                stop = idx
+        segment = tail[:stop]
+        lines: List[str] = []
+        for raw_line in segment.splitlines():
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith(('=', '-')):
+                continue
+            if stripped.upper().startswith('MEDICINE'):
+                continue
+            cleaned = stripped.lstrip('•-').strip()
+            if not cleaned or cleaned.lower().startswith('none'):
+                continue
+            lines.append(cleaned.rstrip('.'))
+        return lines
+
+    def _fallback_questions() -> List[str]:
+        fallback: List[str] = []
+        summary_text = (summary or '').strip()
+        def _push(candidate: Optional[str]):
+            if not candidate:
+                return
+            clean = candidate.strip()
+            if clean and clean not in fallback:
+                fallback.append(clean)
+
+        if summary_text:
+            complaints = _extract_section_lines(summary_text, 'CHIEF COMPLAINTS')
+            for complaint in complaints:
+                _push(f"How have your {complaint.lower()} progressed since the last visit?")
+
+            suggestions = _extract_section_lines(summary_text, 'SUGGESTIONS / ADVICE')
+            for suggestion in suggestions:
+                _push(f"Were you able to follow the advice about {suggestion.lower()}?")
+
+            followups = _extract_section_lines(summary_text, 'NEXT VISIT / FOLLOW-UP')
+            for item in followups:
+                _push(f"Do we need to adjust the follow-up plan regarding {item.lower()}?")
+
+            investigations = _extract_section_lines(summary_text, 'NEXT INVESTIGATIONS TO BE DONE')
+            for inv in investigations:
+                _push(f"Have you scheduled the recommended investigation: {inv}?")
+
+        if transcript and len(fallback) < max_questions:
+            first_sentences = transcript.strip().split('.')[:2]
+            for sentence in first_sentences:
+                snippet = sentence.strip()
+                if snippet:
+                    _push(f"Any updates regarding '{snippet}' since the last consultation?")
+
+        generic_pool = [
+            'Have there been any new symptoms or concerns since our last consultation?',
+            'Are the prescribed medicines causing any side effects or challenges?',
+            'How are you feeling overall compared to the previous visit?',
+            'Is the current treatment plan manageable for you day to day?',
+        ]
+        for generic in generic_pool:
+            if len(fallback) >= max_questions:
+                break
+            _push(generic)
+
+        return fallback[:max_questions]
+
+    context_chunks = []
+    if summary:
+        context_chunks.append(f"Previous Summary:\n{summary.strip()}")
+    if transcript:
+        snippet = transcript.strip()
+        snippet = snippet[:4000]
+        context_chunks.append(f"Transcript Excerpt:\n{snippet}")
+
+    if not context_chunks:
+        return _fallback_questions()
+
+    visit_bits = []
+    if visit_datetime:
+        visit_bits.append(f"Visit Date: {visit_datetime}")
+    if doctor_name:
+        visit_bits.append(f"Consulted Doctor: {doctor_name}")
+    if doctor_department:
+        visit_bits.append(f"Department: {doctor_department}")
+
+    visit_context = "\n".join(visit_bits)
+    prompt = f"""A doctor is preparing for the patient's next appointment. Based on the last consultation details below, craft {max_questions} concise follow-up questions that reference prior complaints, treatments, or advice. Questions must:
+1. Stay within medical scope.
+2. Reference concrete details from the provided context.
+3. Be phrased conversationally so the doctor can ask them verbatim.
+4. Avoid mentioning the doctor's or patient's name explicitly.
+
+Return ONLY a JSON array of strings, for example:
+["How have your morning fevers been this week?", "Are you still taking the prescribed antibiotics twice a day?"]
+
+Context:
+{visit_context}
+{os.linesep.join(context_chunks)}
+"""
+
+    client = mode = None
+    if OPENAI_KEY:
+        client, mode = _get_openai_client()
+    else:
+        print('[FOLLOWUP] OPENAI_API_KEY missing; using fallback questions only.')
+
+    def _call_openai(messages):
+        if not client or not mode:
+            return None
+        if mode == 'modern':
+            resp = client.chat.completions.create(
+                model='gpt-3.5-turbo',
+                messages=messages,
+                max_tokens=256,
+                temperature=0.4,
+            )
+            return resp.choices[0].message.content
+        import openai as _openai
+        resp = _openai.ChatCompletion.create(
+            model='gpt-3.5-turbo',
+            messages=messages,
+            max_tokens=256,
+            temperature=0.4,
+        )
+        return resp['choices'][0]['message']['content']
+
+    def _parse_questions(raw: str) -> List[str]:
+        if not raw:
+            return []
+        cleaned = raw.strip()
+        if '```' in cleaned:
+            parts = cleaned.split('```')
+            if len(parts) >= 2:
+                cleaned = parts[1].replace('json', '').strip()
+        try:
+            data = json.loads(cleaned)
+            if isinstance(data, dict):
+                if 'questions' in data and isinstance(data['questions'], list):
+                    data = data['questions']
+                else:
+                    data = list(data.values())
+            if isinstance(data, list):
+                return [str(q).strip() for q in data if str(q).strip()]
+        except Exception:
+            pass
+        # Fallback: split lines
+        fallback = []
+        for line in cleaned.splitlines():
+            line = line.strip().lstrip('-').strip()
+            if line:
+                fallback.append(line)
+            if len(fallback) >= max_questions:
+                break
+        return fallback
+
+    questions: List[str] = []
+    if client and mode:
+        try:
+            raw = _call_openai([
+                {
+                    'role': 'system',
+                    'content': 'You craft medically appropriate follow-up questions based solely on provided consultation notes.'
+                },
+                {'role': 'user', 'content': prompt},
+            ])
+            questions = _parse_questions(raw)
+        except Exception as exc:
+            print(f"[FOLLOWUP] Failed to generate follow-up questions: {exc}")
+
+    if len(questions) < max_questions:
+        fallback = _fallback_questions()
+        for candidate in fallback:
+            if len(questions) >= max_questions:
+                break
+            if candidate not in questions:
+                questions.append(candidate)
+
+    return questions[:max_questions]
 
 
 def summarize_with_openai(text: str, symptom_data: dict = None, max_tokens: int = 512) -> str:
@@ -870,10 +1082,25 @@ def get_patient_by_uhid(uhid: str):
         return JSONResponse({'error': 'Patient not found'}, status_code=404)
 
     patient, history = result
+    follow_up_questions: List[str] = []
+    if history:
+        latest_consultation = get_consultation_by_id(history[0]['id'])
+        if latest_consultation:
+            doctor_meta = latest_consultation.get('doctor') or {}
+            follow_up_questions = generate_followup_questions(
+                transcript=latest_consultation.get('transcript'),
+                summary=latest_consultation.get('summary'),
+                visit_datetime=latest_consultation.get('visit_datetime'),
+                doctor_name=doctor_meta.get('name'),
+                doctor_department=doctor_meta.get('department'),
+            )
+            if follow_up_questions:
+                history[0]['follow_up_questions'] = follow_up_questions
     return {
         'patient': patient,
         'total_consultations': len(history),
-        'consultations': history
+        'consultations': history,
+        'follow_up_questions': follow_up_questions,
     }
 
 

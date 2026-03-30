@@ -4,7 +4,7 @@ __pycache__/
 *.pyd 
 .Python 
 env/ 
-venv/ 
+.venv
 .env 
 uploads/ 
 logs/ 

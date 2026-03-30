@@ -1,0 +1,123 @@
+Medical Scribe Project — Detailed Worklog
+=========================================
+
+Overview
+--------
+- Built an AI medical scribe that records consultations, transcribes audio (AssemblyAI/OpenAI), validates symptoms via an AIMS catalog, and assembles structured summaries.
+- Implemented a four-step wizard UI (Doctor → Patient → Consultation → Summary) tied to FastAPI endpoints, SQLite storage, and AI pipelines.
+- Automated setup scripts, Dockerization, GitHub pushes, and AWS EC2 deployment.
+
+Root-Level Docs & Automation
+----------------------------
+`README.md`
+	- Quick-start instructions for cloning, configuring `.env`, preparing the virtual environment, running Uvicorn, and using CLI tools.
+
+`requirements.txt`
+	- Dependency manifest covering FastAPI, Uvicorn, AssemblyAI, OpenAI, ngrok, `python-multipart`, `pydub`, `sounddevice`, etc.
+
+`setup_venv.bat`
+	- Robust Windows script that deletes broken envs, tries `py`, `python`, or `virtualenv`, then upgrades pip and installs project packages.
+
+`start_server.bat`
+	- Launches `uvicorn app.openai_server:app --reload` inside `.venv` for one-command local runs.
+
+`Dockerfile`
+	- Builds a slim Python 3.11 image, installs OS libs (`build-essential`, `libportaudio2`, `libsndfile1`), copies the repo, installs dependencies, and runs the FastAPI app on port 8000.
+
+`project_progress.txt`
+	- Living changelog (this file) describing every major component, workflow, and deployment milestone.
+
+Backend (`app/`)
+-----------------
+`app/openai_server.py`
+	- Central FastAPI server. Serves static UI, starts ngrok (optional), and exposes endpoints:
+		• `/upload` (audio ingestion → ffmpeg/pydub conversion → AssemblyAI transcription → transcript storage)
+		• `/summarize` (symptom extraction + OpenAI structured summary + DB persistence)
+		• `/doctors`, `/patients`, `/patients/{uhid}`, `/consultations/{id}` (CRUD + history)
+		• `/extract_symptoms`, `/approve_symptom`, `/summary`, `/unknown_symptoms`
+	- Includes privacy masking, dual OpenAI SDK handling, status logging, and background tasks.
+
+`app/database.py`
+	- SQLite helper that initializes tables/triggers, ensures new columns exist, auto-generates UHIDs (`AIMS0001+`), and exposes `upsert_doctor`, `upsert_patient`, `add_consultation_record`, `get_patient_with_history`, etc.
+
+`app/models.py`
+	- SQLAlchemy ORM models mirroring the SQLite schema for future migrations or analytic jobs.
+
+`app/symptom_pipeline.py`
+	- Loads `data/Final_Augmented_dataset_Diseases_and_Symptoms.csv`, matches catalog symptoms, logs unknown mentions, supports approvals, and returns JSON consumed by `/summarize`.
+
+`app/aai_record_and_transcribe.py` & `app/aai_file_transcribe.py`
+	- CLI utilities to list devices, capture microphone audio, or transcribe files via AssemblyAI for offline tests.
+
+`app/summarize_openai.py` & `app/summarize_assemblyai.py`
+	- Standalone scripts that read transcript files and generate summaries using OpenAI or AssemblyAI LeMUR.
+
+Frontend (`web/static/`)
+-----------------------
+`index.html`
+	- Doctor intake page with gradient hero, metadata form, progress nav, and CTA to save + proceed.
+
+`patient.html`
+	- Patient registration form with UHID search, visit timestamp auto-updater, consultation history cards, and address capture synced with `/patients`.
+
+`consultation.html`
+	- Recording workspace featuring Start/Stop/Upload buttons, status badge (Idle → Recording → Processing), enlarged transcript textarea, and navigation controls.
+
+`summary.html`
+	- Displays composed summary, validated symptoms, unknown mentions, and download button.
+
+`js/wizard.js`
+	- Orchestrates the wizard: sets up each page, runs header clock, handles localStorage, drives MediaRecorder, disables/enables buttons, shows the Processing badge, uploads audio, requests summaries, renders symptom data, and routes between steps.
+
+`css/main.css`
+	- Defines entire visual system: gradients, glass card styling, stepper circles (white default/black active), button states (including `.is-disabled`), status badges, responsive grid, and transcript textarea sizing.
+
+`medical_scribe.html`
+	- Legacy landing view retained for reference while the four-step wizard became primary.
+
+Utilities, Data, and Assets
+----------------------------
+`utils/record.py`
+	- Helper for listing audio devices and recording WAV files (used by CLI tools).
+
+`data/Final_Augmented_dataset_Diseases_and_Symptoms.csv`
+	- Master catalog powering the symptom pipeline; unknowns are logged in `logs/unknown_symptoms.csv`.
+
+`uploads/`
+	- Stores raw audio, converted WAVs, transcripts, and summary artifacts produced by `/upload`.
+
+`logs/`
+	- Holds pipeline logs plus CSV exports of unknown symptoms awaiting approval.
+
+`ngrok/`
+	- Contains Windows ngrok binaries/config used when `ENABLE_NGROK=true` to publish public URLs.
+
+Supporting Scripts & Tests
+--------------------------
+`convert_dataset.py`
+	- Utility for transforming the large symptom dataset into formats suitable for the pipeline.
+
+`simple_openai_test.py`, `test_openai_key.py`
+	- Credential smoke tests to confirm OpenAI keys before deploying.
+
+`recorder/` samples & `uploads/` artifacts
+	- Provide example media/transcripts to validate CLI workflows and backend uploading.
+
+Git Workflow (with Stash)
+-------------------------
+1. Edit files locally, run `git status` to review.
+2. Stage via `git add .` and commit with descriptive messages.
+3. When switching tasks, park work with `git stash push -m "message"` and restore via `git stash pop`.
+4. Push to GitHub mainline using `git push origin main` (latest push confirmed from `D:\AIDI\Medical Scribe`).
+
+AWS EC2 + Docker Deployment
+---------------------------
+1. Provisioned an EC2 instance, installed Docker/Compose, and cloned the GitHub repo.
+2. Built the image: `docker build -t medical-scribe .`.
+3. Ran the container: `docker run -d -p 80:8000 --env-file .env medical-scribe` (or equivalent compose stack).
+4. Verified `/static/index.html`, `/upload`, `/summarize`, and optional ngrok URLs over the EC2 public DNS.
+
+Current State & Next Steps
+--------------------------
+- Source tree mirrors all updates on GitHub (`main`) and the Dockerized EC2 deployment.
+- Ready for subsequent milestones such as authentication, clinician feedback capture, audit logs, analytics dashboards, or EHR integrations.

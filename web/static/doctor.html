@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Medical Scribe - Doctor Portal</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body data-step="doctor">
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>🏥 AI Medical Scribe System</h1>
+        <p>Intelligent Documentation with Symptom Validation & AIMS Protocol</p>
+      </div>
+      <div class="header-right">
+        <div class="header-badge">✨ AIMS Powered</div>
+        <div class="header-time" id="headerTime">--</div>
+      </div>
+    </div>
+
+    <nav class="progress-nav" id="progressNav"></nav>
+
+    <div class="card">
+      <h2><span class="section-icon">👨‍⚕️</span> Doctor Information</h2>
+      <form id="doctorForm">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="doctorName">Doctor Name <span class="required">*</span></label>
+            <input type="text" id="doctorName" name="doctorName" placeholder="Dr. Jane Doe" required>
+          </div>
+          <div class="form-group">
+            <label for="department">Department <span class="required">*</span></label>
+            <select id="department" name="department" required>
+              <option value="">Select Department</option>
+              <option value="Cardiology">Cardiology</option>
+              <option value="Neurology">Neurology</option>
+              <option value="Orthopedics">Orthopedics</option>
+              <option value="Pediatrics">Pediatrics</option>
+              <option value="General Medicine">General Medicine</option>
+              <option value="ENT">ENT</option>
+              <option value="Dermatology">Dermatology</option>
+              <option value="Psychiatry">Psychiatry</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="designation">Designation <span class="required">*</span></label>
+            <select id="designation" name="designation" required>
+              <option value="">Select Designation</option>
+              <option value="Consultant">Consultant</option>
+              <option value="Senior Consultant">Senior Consultant</option>
+              <option value="Junior Resident">Junior Resident</option>
+              <option value="Senior Resident">Senior Resident</option>
+              <option value="Visiting Specialist">Visiting Specialist</option>
+              <option value="Locum">Locum</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="patientType">Patient Type <span class="required">*</span></label>
+            <select id="patientType" name="patientType" required>
+              <option value="">Select Type</option>
+              <option value="Out-Patient">Out-Patient (OPD)</option>
+              <option value="In-Patient">In-Patient (IPD)</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" type="submit">
+          <span>✓</span> Save &amp; Continue to Patients
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/wizard.js" defer></script>
+</body>
+</html>

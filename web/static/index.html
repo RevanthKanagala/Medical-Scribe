@@ -2,74 +2,133 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Medical Scribe - Doctor Portal</title>
+  <title>Medical Scribe Portal</title>
   <link rel="stylesheet" href="css/main.css">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(circle at top, #fef3c7, #ffe4e6, #ede9fe);
+      min-height: 100vh;
+    }
+    .landing-wrapper {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+    .landing-card {
+      background: white;
+      border-radius: 28px;
+      padding: 40px;
+      max-width: 960px;
+      width: 100%;
+      box-shadow: 0 30px 80px rgba(34, 0, 51, 0.15);
+    }
+    .landing-hero {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .landing-hero span.label {
+      color: #f97316;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+    }
+    .landing-hero h1 {
+      font-size: 2.5rem;
+      margin: 0;
+      color: #1f1f3a;
+    }
+    .landing-hero p {
+      font-size: 1.1rem;
+      color: #4a4a68;
+      margin: 0;
+    }
+    .landing-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 24px;
+    }
+    .landing-option {
+      border: 2px solid rgba(31,31,58,0.08);
+      border-radius: 20px;
+      padding: 24px;
+      background: linear-gradient(135deg, rgba(147,197,253,0.25), rgba(191,219,254,0.05));
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: transform .2s ease, box-shadow .2s ease;
+      min-height: 220px;
+    }
+    .landing-option:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px rgba(15,23,42,0.15);
+    }
+    .landing-option h3 {
+      margin: 0;
+      font-size: 1.3rem;
+    }
+    .landing-option p {
+      margin: 0;
+      color: #4a5568;
+      flex: 1;
+    }
+    .option-actions a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: background .2s ease, color .2s ease;
+    }
+    .btn-primary-link {
+      background: #1d4ed8;
+      color: white;
+    }
+    .btn-primary-link:hover {
+      background: #1e40af;
+    }
+    .btn-disabled-link {
+      background: rgba(15,23,42,0.08);
+      color: #475569;
+      cursor: not-allowed;
+    }
+  </style>
 </head>
-<body data-step="doctor">
-  <div class="container">
-    <div class="header">
-      <div class="header-left">
-        <h1>🏥 AI Medical Scribe System</h1>
-        <p>Intelligent Documentation with Symptom Validation & AIMS Protocol</p>
+<body>
+  <div class="landing-wrapper">
+    <div class="landing-card">
+      <div class="landing-hero">
+        <span class="label">Arc Health Platform</span>
+        <h1>Welcome to the AI Medical Scribe Suite</h1>
+        <p>Choose how you would like to continue. Doctors enter the guided documentation flow; administrators will soon manage platform controls.</p>
       </div>
-      <div class="header-right">
-        <div class="header-badge">✨ AIMS Powered</div>
-        <div class="header-time" id="headerTime">--</div>
-      </div>
-    </div>
-
-    <nav class="progress-nav" id="progressNav"></nav>
-
-    <div class="card">
-      <h2><span class="section-icon">👨‍⚕️</span> Doctor Information</h2>
-      <form id="doctorForm">
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="doctorName">Doctor Name <span class="required">*</span></label>
-            <input type="text" id="doctorName" name="doctorName" placeholder="Dr. Jane Doe" required>
-          </div>
-          <div class="form-group">
-            <label for="department">Department <span class="required">*</span></label>
-            <select id="department" name="department" required>
-              <option value="">Select Department</option>
-              <option value="Cardiology">Cardiology</option>
-              <option value="Neurology">Neurology</option>
-              <option value="Orthopedics">Orthopedics</option>
-              <option value="Pediatrics">Pediatrics</option>
-              <option value="General Medicine">General Medicine</option>
-              <option value="ENT">ENT</option>
-              <option value="Dermatology">Dermatology</option>
-              <option value="Psychiatry">Psychiatry</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="designation">Designation <span class="required">*</span></label>
-            <select id="designation" name="designation" required>
-              <option value="">Select Designation</option>
-              <option value="Consultant">Consultant</option>
-              <option value="Senior Consultant">Senior Consultant</option>
-              <option value="Junior Resident">Junior Resident</option>
-              <option value="Senior Resident">Senior Resident</option>
-              <option value="Visiting Specialist">Visiting Specialist</option>
-              <option value="Locum">Locum</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="patientType">Patient Type <span class="required">*</span></label>
-            <select id="patientType" name="patientType" required>
-              <option value="">Select Type</option>
-              <option value="Out-Patient">Out-Patient (OPD)</option>
-              <option value="In-Patient">In-Patient (IPD)</option>
-            </select>
+      <div class="landing-options">
+        <div class="landing-option">
+          <div style="font-size:2.5rem;">🩺</div>
+          <h3>Doctor Login</h3>
+          <p>Access the multi-step workflow for patient intake, consultation recording, and AI-generated summaries.</p>
+          <div class="option-actions">
+            <a class="btn-primary-link" href="doctor.html">Proceed to Doctor Portal →</a>
           </div>
         </div>
-        <button class="btn btn-primary" type="submit">
-          <span>✓</span> Save &amp; Continue to Patients
-        </button>
-      </form>
+        <div class="landing-option" style="background:linear-gradient(135deg, rgba(253,230,138,0.4), rgba(254,215,170,0.35));">
+          <div style="font-size:2.5rem;">🛡️</div>
+          <h3>Administrator Login</h3>
+          <p>Coming soon: manage users, audit consultations, and configure system settings.</p>
+          <div class="option-actions">
+            <a class="btn-disabled-link" href="javascript:void(0)">Admin Area Locked</a>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-
-  <script src="js/wizard.js" defer></script>
 </body>
 </html>

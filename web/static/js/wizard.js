@@ -13,7 +13,7 @@ let recordedChunks = [];
 let existingPatientUhid = '';
 
 const navSteps = [
-  { id: 'doctor', label: 'Doctor Info', href: 'index.html' },
+  { id: 'doctor', label: 'Doctor Info', href: 'doctor.html' },
   { id: 'patient', label: 'Patient Registration', href: 'patient.html' },
   { id: 'consultation', label: 'Consultation', href: 'consultation.html' },
   { id: 'summary', label: 'Summary', href: 'summary.html' }
@@ -225,6 +225,7 @@ function resetPatientFormFields(form) {
   if (historySection) historySection.classList.add('hidden');
   const searchResult = document.getElementById('searchResult');
   if (searchResult) searchResult.innerHTML = '';
+  renderFollowUpQuestions();
   setPatientInfo(null);
 }
 
@@ -273,6 +274,31 @@ function displayConsultationHistory(consultations) {
     `;
     card.addEventListener('click', () => viewConsultationDetails(consult.id));
     historyList.appendChild(card);
+  });
+}
+
+function renderFollowUpQuestions(questions = [], latestVisitIso) {
+  const card = document.getElementById('followUpCard');
+  const list = document.getElementById('followUpList');
+  const meta = document.getElementById('followUpMeta');
+  if (!card || !list || !meta) return;
+
+  list.innerHTML = '';
+  if (!questions || questions.length === 0) {
+    card.classList.add('hidden');
+    meta.textContent = 'Last visit: --';
+    return;
+  }
+
+  const formattedVisit = latestVisitIso ? new Date(latestVisitIso).toLocaleString('en-CA') : '--';
+  meta.textContent = `Last visit: ${formattedVisit}`;
+  card.classList.remove('hidden');
+
+  questions.forEach((question, index) => {
+    const li = document.createElement('li');
+    li.textContent = question;
+    li.setAttribute('data-question-index', String(index + 1));
+    list.appendChild(li);
   });
 }
 
@@ -378,6 +404,9 @@ async function searchPatientByUhid() {
 
     populatePatientForm(document.getElementById('patientForm'), data.patient);
     displayConsultationHistory(data.consultations || []);
+    const latestVisit = data.consultations?.[0]?.visit_datetime;
+    const questionSet = data.follow_up_questions?.length ? data.follow_up_questions : data.consultations?.[0]?.follow_up_questions;
+    renderFollowUpQuestions(questionSet || [], latestVisit);
     setPatientInfo(data.patient);
   } catch (err) {
     searchResult.innerHTML = `<p style="color:#e53e3e">Search failed: ${err.message}</p>`;
