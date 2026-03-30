@@ -20,13 +20,19 @@
 
     <nav class="progress-nav" id="progressNav"></nav>
 
-    <div class="card">
+    <div class="card" id="symptomsSection">
       <h2><span class="section-icon">📋</span> Medical Summary Report</h2>
       <div class="summary-output" id="summaryOutput">Summary will appear here once generated.</div>
       <div class="nav-controls" style="justify-content:space-between;margin-top:20px;">
         <a class="btn btn-upload" href="consultation.html"><span>←</span> Back to Consultation</a>
         <button class="btn btn-success" type="button" id="downloadSummaryBtn"><span>💾</span> Download Summary</button>
       </div>
+    </div>
+
+    <div class="card hidden" id="validationCard">
+      <h2><span class="section-icon">🛡️</span> Symptom Consistency Check</h2>
+      <div id="validationStatus" class="validation-status">Run a summary to view validation details.</div>
+      <div id="validationDetails" class="validation-details"></div>
     </div>
 
     <div class="card">

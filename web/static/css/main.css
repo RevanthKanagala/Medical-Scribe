@@ -314,6 +314,47 @@ textarea.large {
   border-color: #ed8936;
 }
 
+.validation-status {
+  border-radius: 12px;
+  padding: 14px 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  background: #edf2f7;
+  color: #1a202c;
+}
+
+.validation-status.status-ok {
+  background: #c6f6d5;
+  color: #22543d;
+}
+
+.validation-status.status-warn {
+  background: #fed7d7;
+  color: #822727;
+}
+
+.validation-details section {
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f7fafc;
+}
+
+.validation-details h4 {
+  margin: 0 0 6px 0;
+  font-size: 0.95rem;
+  color: #2d3748;
+}
+
+.validation-details ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #4a5568;
+}
+
+.validation-details li {
+  margin-bottom: 4px;
+}
 .symptom-list { list-style: none; }
 
 .symptom-list li {

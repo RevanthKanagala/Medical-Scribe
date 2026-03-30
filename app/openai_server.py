@@ -74,6 +74,92 @@ if static_dir.exists():
 last_summary = ""
 last_symptom_extraction = {}
 
+SUMMARY_HEADERS = [
+    'CHIEF COMPLAINTS',
+    'ALLERGIES',
+    'DIAGNOSIS / PRE-EXISTING DISEASES',
+    'MEDICINES PRESCRIBED',
+    'SUGGESTIONS / ADVICE',
+    'NEXT VISIT / FOLLOW-UP',
+    'NEXT INVESTIGATIONS TO BE DONE',
+]
+
+
+def extract_summary_section(summary_text: Optional[str], header: str) -> List[str]:
+    """Return cleaned lines from a given summary section."""
+    if not summary_text:
+        return []
+    marker = f"{header}:"
+    if marker not in summary_text:
+        return []
+
+    tail = summary_text.split(marker, 1)[1]
+    stop = len(tail)
+    for other in SUMMARY_HEADERS:
+        if other == header:
+            continue
+        marker_other = f"{other}:"
+        idx = tail.find(marker_other)
+        if idx != -1 and idx < stop:
+            stop = idx
+
+    segment = tail[:stop]
+    cleaned_lines: List[str] = []
+    for raw_line in segment.splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith(('=', '-')):
+            continue
+        if stripped.upper().startswith('MEDICINE'):
+            continue
+        normalized = stripped.lstrip('•-').strip()
+        if normalized:
+            cleaned_lines.append(normalized)
+    return cleaned_lines
+
+
+def _normalize_phrase(value: Optional[str]) -> str:
+    if not value:
+        return ''
+    return ''.join(ch.lower() for ch in value if ch.isalnum() or ch.isspace()).strip()
+
+
+def validate_summary_against_symptoms(summary_text: Optional[str], symptom_data: Optional[dict]) -> dict:
+    """Verify summary complaints align with validated symptoms."""
+    symptoms_present = (symptom_data or {}).get('symptoms_present') or []
+    validated_names = [s.get('name', '') for s in symptoms_present if s.get('name')]
+    validated_map = {_normalize_phrase(name): name for name in validated_names if _normalize_phrase(name)}
+
+    section_items = extract_summary_section(summary_text or '', 'CHIEF COMPLAINTS')
+    matched_names: List[str] = []
+    unmatched_summary_items: List[str] = []
+
+    for item in section_items:
+        normalized_item = _normalize_phrase(item)
+        if not normalized_item:
+            continue
+        matched = None
+        for norm_name, original_name in validated_map.items():
+            if norm_name in normalized_item or normalized_item in norm_name:
+                matched = original_name
+                break
+        if matched:
+            if matched not in matched_names:
+                matched_names.append(matched)
+        else:
+            unmatched_summary_items.append(item)
+
+    missing_symptoms = [name for name in validated_names if name not in matched_names]
+    is_valid = not missing_symptoms and not unmatched_summary_items
+
+    return {
+        'is_valid': is_valid,
+        'validated_symptoms': validated_names,
+        'matched_symptoms': matched_names,
+        'missing_symptoms': missing_symptoms,
+        'unmatched_summary_items': unmatched_summary_items,
+        'checked_section': 'CHIEF COMPLAINTS',
+    }
+
 
 def _get_openai_client():
     """Return (client, mode) where mode is 'modern' or 'legacy'."""
@@ -398,44 +484,6 @@ def generate_followup_questions(
     max_questions: int = 5,
 ) -> List[str]:
     """Create focused follow-up questions for the next visit."""
-    def _extract_section_lines(body: str, header: str) -> List[str]:
-        headers = [
-            'CHIEF COMPLAINTS',
-            'ALLERGIES',
-            'DIAGNOSIS / PRE-EXISTING DISEASES',
-            'MEDICINES PRESCRIBED',
-            'SUGGESTIONS / ADVICE',
-            'NEXT VISIT / FOLLOW-UP',
-            'NEXT INVESTIGATIONS TO BE DONE',
-        ]
-        marker = f"{header}:"
-        if marker not in body:
-            return []
-        tail = body.split(marker, 1)[1]
-        stop = len(tail)
-        for other in headers:
-            if other == header:
-                continue
-            marker_other = f"{other}:"
-            idx = tail.find(marker_other)
-            if idx != -1 and idx < stop:
-                stop = idx
-        segment = tail[:stop]
-        lines: List[str] = []
-        for raw_line in segment.splitlines():
-            stripped = raw_line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith(('=', '-')):
-                continue
-            if stripped.upper().startswith('MEDICINE'):
-                continue
-            cleaned = stripped.lstrip('•-').strip()
-            if not cleaned or cleaned.lower().startswith('none'):
-                continue
-            lines.append(cleaned.rstrip('.'))
-        return lines
-
     def _fallback_questions() -> List[str]:
         fallback: List[str] = []
         summary_text = (summary or '').strip()
@@ -447,19 +495,19 @@ def generate_followup_questions(
                 fallback.append(clean)
 
         if summary_text:
-            complaints = _extract_section_lines(summary_text, 'CHIEF COMPLAINTS')
+            complaints = [line.rstrip('.') for line in extract_summary_section(summary_text, 'CHIEF COMPLAINTS') if not line.lower().startswith('none')]
             for complaint in complaints:
                 _push(f"How have your {complaint.lower()} progressed since the last visit?")
 
-            suggestions = _extract_section_lines(summary_text, 'SUGGESTIONS / ADVICE')
+            suggestions = extract_summary_section(summary_text, 'SUGGESTIONS / ADVICE')
             for suggestion in suggestions:
                 _push(f"Were you able to follow the advice about {suggestion.lower()}?")
 
-            followups = _extract_section_lines(summary_text, 'NEXT VISIT / FOLLOW-UP')
+            followups = extract_summary_section(summary_text, 'NEXT VISIT / FOLLOW-UP')
             for item in followups:
                 _push(f"Do we need to adjust the follow-up plan regarding {item.lower()}?")
 
-            investigations = _extract_section_lines(summary_text, 'NEXT INVESTIGATIONS TO BE DONE')
+            investigations = extract_summary_section(summary_text, 'NEXT INVESTIGATIONS TO BE DONE')
             for inv in investigations:
                 _push(f"Have you scheduled the recommended investigation: {inv}?")
 
@@ -948,6 +996,7 @@ async def summarize_endpoint(
             patient_data
         )
         last_summary = summary
+        validation_result = validate_summary_against_symptoms(summary, symptom_result)
         
         print(f"[DEBUG] Summary generated successfully! Length: {len(summary)} chars")
         
@@ -977,7 +1026,8 @@ async def summarize_endpoint(
             'symptoms_present': symptom_result['symptoms_present'],
             'unknown_mentions': symptom_result['unknown_mentions'],
             'symptom_count': symptom_result['symptom_count'],
-            'consultation_id': consultation_id
+            'consultation_id': consultation_id,
+            'summary_validation': validation_result,
         }
         
         return response

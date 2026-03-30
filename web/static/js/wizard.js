@@ -5,7 +5,8 @@ const STORAGE_KEYS = {
   patient: 'aims_patient',
   summary: 'aims_summary',
   symptoms: 'aims_symptoms',
-  consultationId: 'aims_consultation_id'
+  consultationId: 'aims_consultation_id',
+  validation: 'aims_validation'
 };
 
 let mediaRecorder;
@@ -89,6 +90,14 @@ function setSymptomsData(data) {
 
 function getSymptomsData() {
   return readFromStorage(STORAGE_KEYS.symptoms);
+}
+
+function setValidationData(data) {
+  saveToStorage(STORAGE_KEYS.validation, data);
+}
+
+function getValidationData() {
+  return readFromStorage(STORAGE_KEYS.validation);
 }
 
 function setConsultationId(id) {
@@ -227,6 +236,7 @@ function resetPatientFormFields(form) {
   if (searchResult) searchResult.innerHTML = '';
   renderFollowUpQuestions();
   setPatientInfo(null);
+  setValidationData(null);
 }
 
 function populatePatientForm(form, patient) {
@@ -623,6 +633,7 @@ async function generateSummary() {
       validated: data.symptoms_present,
       unknown: data.unknown_mentions
     });
+    setValidationData(data.summary_validation || null);
     setConsultationId(data.consultation_id);
     showToast('Summary generated successfully.');
     window.location.href = 'summary.html';
@@ -665,6 +676,42 @@ function renderSymptoms(validated, unknown) {
   }
 }
 
+function renderValidationResult(validation) {
+  const card = document.getElementById('validationCard');
+  const statusEl = document.getElementById('validationStatus');
+  const detailsEl = document.getElementById('validationDetails');
+  if (!card || !statusEl || !detailsEl) return;
+
+  if (!validation) {
+    card.classList.add('hidden');
+    statusEl.textContent = 'No validation data available.';
+    detailsEl.innerHTML = '';
+    return;
+  }
+
+  card.classList.remove('hidden');
+  const isValid = Boolean(validation.is_valid);
+  statusEl.textContent = isValid
+    ? 'Summary symptoms match the validated transcript findings.'
+    : 'Review required: summary symptoms differ from transcript extraction.';
+  statusEl.className = `validation-status ${isValid ? 'status-ok' : 'status-warn'}`;
+
+  let detailsHtml = '';
+  if (validation.missing_symptoms && validation.missing_symptoms.length) {
+    const list = validation.missing_symptoms.map(item => `<li>${item}</li>`).join('');
+    detailsHtml += `<section><h4>Symptoms not represented in summary</h4><ul>${list}</ul></section>`;
+  }
+  if (validation.unmatched_summary_items && validation.unmatched_summary_items.length) {
+    const list = validation.unmatched_summary_items.map(item => `<li>${item}</li>`).join('');
+    detailsHtml += `<section><h4>Summary items not in validated catalog</h4><ul>${list}</ul></section>`;
+  }
+
+  if (!detailsHtml) {
+    detailsHtml = '<p>All validated symptoms are reflected in the summary.</p>';
+  }
+  detailsEl.innerHTML = detailsHtml;
+}
+
 // ---------------------- Summary Page ----------------------
 function setupSummaryPage() {
   const summaryContainer = document.getElementById('summaryOutput');
@@ -681,6 +728,8 @@ function setupSummaryPage() {
   if (symptoms) {
     renderSymptoms(symptoms.validated || [], symptoms.unknown || []);
   }
+
+  renderValidationResult(getValidationData());
 }
 
 function downloadSummary() {
