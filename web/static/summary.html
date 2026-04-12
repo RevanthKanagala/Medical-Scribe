@@ -4,6 +4,62 @@
   <meta charset="utf-8" />
   <title>Medical Scribe - Summary</title>
   <link rel="stylesheet" href="css/main.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    /* ---- Clickable symptom chips ---- */
+    .symptom-clickable {
+      cursor: pointer;
+      border-radius: 8px;
+      padding: 5px 8px;
+      transition: background 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .symptom-clickable:hover {
+      background: rgba(102, 126, 234, 0.1);
+    }
+    .symptom-link-hint {
+      font-size: 0.8rem;
+      color: #667eea;
+      white-space: nowrap;
+      opacity: 0.75;
+    }
+    .symptom-clickable:hover .symptom-link-hint {
+      opacity: 1;
+      text-decoration: underline;
+    }
+    /* ---- Transcript reference panel ---- */
+    .transcript-active-label {
+      font-size: 0.88rem;
+      color: #667eea;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .transcript-reference-view {
+      background: #f8f9fc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 18px 20px;
+      font-size: 0.95rem;
+      line-height: 1.9;
+      max-height: 420px;
+      overflow-y: auto;
+    }
+    mark.symptom-highlight {
+      background: #fef08a;
+      color: #713f12;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-weight: 700;
+      scroll-margin-top: 80px;
+    }
+    mark.symptom-highlight.first-match {
+      background: #fb923c;
+      color: #fff;
+    }
+  </style>
 </head>
 <body data-step="summary">
   <div class="container">
@@ -25,7 +81,7 @@
       <div class="summary-output" id="summaryOutput">Summary will appear here once generated.</div>
       <div class="nav-controls" style="justify-content:space-between;margin-top:20px;">
         <a class="btn btn-upload" href="consultation.html"><span>←</span> Back to Consultation</a>
-        <button class="btn btn-success" type="button" id="downloadSummaryBtn"><span>💾</span> Download Summary</button>
+        <button class="btn btn-success" type="button" id="downloadPdfBtn"><span>📄</span> Download PDF</button>
       </div>
     </div>
 
@@ -33,6 +89,12 @@
       <h2><span class="section-icon">🛡️</span> Symptom Consistency Check</h2>
       <div id="validationStatus" class="validation-status">Run a summary to view validation details.</div>
       <div id="validationDetails" class="validation-details"></div>
+    </div>
+
+    <div class="card hidden" id="transcriptPanel">
+      <h2><span class="section-icon">🔍</span> Transcript Reference</h2>
+      <p class="transcript-active-label" id="transcriptHighlightLabel"></p>
+      <div id="transcriptView" class="transcript-reference-view">Loading&hellip;</div>
     </div>
 
     <div class="card">

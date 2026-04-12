@@ -6,7 +6,8 @@ const STORAGE_KEYS = {
   summary: 'aims_summary',
   symptoms: 'aims_symptoms',
   consultationId: 'aims_consultation_id',
-  validation: 'aims_validation'
+  validation: 'aims_validation',
+  transcript: 'aims_transcript'
 };
 
 let mediaRecorder;
@@ -108,8 +109,29 @@ function getConsultationId() {
   return readFromStorage(STORAGE_KEYS.consultationId);
 }
 
+function setTranscriptData(text) {
+  saveToStorage(STORAGE_KEYS.transcript, text);
+}
+
+function getTranscriptData() {
+  return readFromStorage(STORAGE_KEYS.transcript);
+}
+
 function showToast(message) {
   alert(message);
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function composeSummaryWithContext(summaryText) {
@@ -629,6 +651,7 @@ async function generateSummary() {
     const summaryOutput = document.getElementById('summaryOutput');
     if (summaryOutput) summaryOutput.textContent = finalSummary;
     setSummaryData(finalSummary);
+    setTranscriptData(transcript);
     setSymptomsData({
       validated: data.symptoms_present,
       unknown: data.unknown_mentions
@@ -658,7 +681,10 @@ function renderSymptoms(validated, unknown) {
   if (validated && validated.length) {
     validated.forEach(item => {
       const li = document.createElement('li');
-      li.innerHTML = `<span><strong>${item.name}</strong> (${item.code}) - ${item.category}</span>`;
+      li.className = 'symptom-clickable';
+      li.title = 'Click to find this symptom in the transcript';
+      li.innerHTML = `<span><strong>${item.name}</strong> (${item.code}) — ${item.category}</span><span class="symptom-link-hint">🔍 Find in transcript</span>`;
+      li.addEventListener('click', () => handleSymptomClick(item.name, item.matched_text));
       validList.appendChild(li);
     });
   } else {
@@ -712,6 +738,126 @@ function renderValidationResult(validation) {
   detailsEl.innerHTML = detailsHtml;
 }
 
+function highlightTermInTranscript(transcript, term) {
+  if (!transcript || !term) {
+    return { html: escapeHtml(transcript).replace(/\n/g, '<br>'), matches: 0 };
+  }
+
+  const regex = new RegExp(escapeRegex(term), 'gi');
+  let lastIndex = 0;
+  let result = '';
+  let matches = 0;
+  let match;
+
+  while ((match = regex.exec(transcript)) !== null) {
+    result += escapeHtml(transcript.slice(lastIndex, match.index));
+    matches += 1;
+    const className = matches === 1 ? 'symptom-highlight first-match' : 'symptom-highlight';
+    result += `<mark class="${className}">${escapeHtml(match[0])}</mark>`;
+    lastIndex = regex.lastIndex;
+  }
+
+  result += escapeHtml(transcript.slice(lastIndex));
+  return { html: result.replace(/\n/g, '<br>'), matches };
+}
+
+function buildTranscriptSearchTerms(symptomName, matchedText) {
+  const baseTerms = [matchedText, symptomName]
+    .map(value => String(value || '').trim().toLowerCase())
+    .filter(Boolean);
+
+  const modifiers = new Set([
+    'sharp', 'severe', 'mild', 'moderate', 'chronic', 'acute', 'persistent',
+    'really', 'bad', 'extreme', 'significant', 'localized', 'generalized'
+  ]);
+
+  const expandedTerms = [];
+  baseTerms.forEach(term => {
+    expandedTerms.push(term);
+
+    const words = term.split(/\s+/).filter(Boolean);
+    const strippedWords = words.filter(word => !modifiers.has(word));
+    if (strippedWords.length && strippedWords.join(' ') !== term) {
+      expandedTerms.push(strippedWords.join(' '));
+    }
+
+    if (words.length >= 2) {
+      for (let size = words.length - 1; size >= 2; size -= 1) {
+        for (let start = 0; start <= words.length - size; start += 1) {
+          expandedTerms.push(words.slice(start, start + size).join(' '));
+        }
+      }
+    }
+  });
+
+  return [...new Set(expandedTerms)].sort((a, b) => b.length - a.length);
+}
+
+function findBestTranscriptMatch(transcript, symptomName, matchedText) {
+  const terms = buildTranscriptSearchTerms(symptomName, matchedText);
+  for (const term of terms) {
+    const regex = new RegExp(escapeRegex(term), 'i');
+    if (regex.test(transcript)) {
+      return term;
+    }
+  }
+  return null;
+}
+
+function focusTermInConsultationTextarea(term) {
+  const transcriptField = document.getElementById('transcript');
+  if (!transcriptField) return false;
+  const text = transcriptField.value || '';
+  const lowerText = text.toLowerCase();
+  const lowerTerm = String(term || '').toLowerCase();
+  const index = lowerText.indexOf(lowerTerm);
+  if (index === -1) return false;
+
+  transcriptField.focus();
+  transcriptField.setSelectionRange(index, index + lowerTerm.length);
+  const lineBefore = text.slice(0, index).split('\n').length;
+  transcriptField.scrollTop = Math.max(0, (lineBefore - 2) * 20);
+  return true;
+}
+
+function handleSymptomClick(symptomName, matchedText) {
+  const transcript = getTranscriptData() || document.getElementById('transcript')?.value || '';
+  if (!transcript) {
+    showToast('Transcript not available yet.');
+    return;
+  }
+
+  const bestMatch = findBestTranscriptMatch(transcript, symptomName, matchedText);
+
+  const transcriptPanel = document.getElementById('transcriptPanel');
+  const transcriptView = document.getElementById('transcriptView');
+  const transcriptLabel = document.getElementById('transcriptHighlightLabel');
+
+  if (transcriptPanel && transcriptView && transcriptLabel) {
+    const { html, matches } = highlightTermInTranscript(transcript, bestMatch || symptomName);
+    transcriptPanel.classList.remove('hidden');
+    transcriptView.innerHTML = html;
+
+    if (matches > 0) {
+      const label = bestMatch && bestMatch.toLowerCase() !== String(symptomName || '').toLowerCase()
+        ? `Showing ${matches} match(es) for "${bestMatch}" linked from "${symptomName}".`
+        : `Showing ${matches} match(es) for "${symptomName}" in transcript.`;
+      transcriptLabel.textContent = label;
+      const first = transcriptView.querySelector('mark.first-match');
+      if (first) {
+        first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } else {
+      transcriptLabel.textContent = `No direct match found for "${symptomName}" in transcript.`;
+    }
+    return;
+  }
+
+  if (!focusTermInConsultationTextarea(bestMatch || symptomName)) {
+    showToast(`Could not find "${symptomName}" in transcript.`);
+  }
+}
+
 // ---------------------- Summary Page ----------------------
 function setupSummaryPage() {
   const summaryContainer = document.getElementById('summaryOutput');
@@ -719,7 +865,7 @@ function setupSummaryPage() {
   const summary = getSummaryData();
   summaryContainer.textContent = summary || 'No summary generated yet.';
 
-  const downloadBtn = document.getElementById('downloadSummaryBtn');
+  const downloadBtn = document.getElementById('downloadPdfBtn') || document.getElementById('downloadSummaryBtn');
   if (downloadBtn) {
     downloadBtn.addEventListener('click', downloadSummary);
   }
@@ -737,17 +883,87 @@ function downloadSummary() {
   if (!summary) {
     return showToast('Nothing to download yet.');
   }
+
+  const jsPdfNamespace = window.jspdf;
+  if (!jsPdfNamespace || !jsPdfNamespace.jsPDF) {
+    showToast('PDF library is unavailable. Please refresh and try again.');
+    return;
+  }
+
   const patient = getPatientInfo() || {};
-  const blob = new Blob([summary], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
+  const doctor = getDoctorInfo() || {};
+  const transcript = getTranscriptData() || '';
   const uhid = patient.uhid || 'UNKNOWN';
-  link.download = `Medical_Summary_${uhid}_${new Date().toISOString().split('T')[0]}.txt`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+
+  const { jsPDF } = jsPdfNamespace;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 42;
+  const textWidth = pageWidth - margin * 2;
+  let y = margin;
+
+  const ensureSpace = (needed = 18) => {
+    if (y + needed > pageHeight - margin) {
+      doc.addPage();
+      y = margin;
+    }
+  };
+
+  const writeHeading = (text) => {
+    ensureSpace(28);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text(text, margin, y);
+    y += 24;
+  };
+
+  const writeLabelValue = (label, value) => {
+    const line = `${label}: ${value || 'N/A'}`;
+    const lines = doc.splitTextToSize(line, textWidth);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    lines.forEach(part => {
+      ensureSpace(16);
+      doc.text(part, margin, y);
+      y += 15;
+    });
+  };
+
+  const writeBlock = (title, content) => {
+    ensureSpace(24);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text(title, margin, y);
+    y += 16;
+
+    const lines = doc.splitTextToSize(content || 'N/A', textWidth);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    lines.forEach(part => {
+      ensureSpace(14);
+      doc.text(part, margin, y);
+      y += 13;
+    });
+    y += 8;
+  };
+
+  const generatedAt = new Date().toLocaleString('en-CA');
+  writeHeading('Medical Consultation Summary');
+  writeLabelValue('Generated', generatedAt);
+  writeLabelValue('Patient UHID', uhid);
+  writeLabelValue('Patient Name', patient.name || 'N/A');
+  writeLabelValue('Doctor', doctor.name || 'N/A');
+  writeLabelValue('Department', doctor.department || 'N/A');
+  writeLabelValue('Designation', doctor.designation || 'N/A');
+  y += 8;
+
+  writeBlock('Summary', summary);
+  if (transcript) {
+    writeBlock('Transcript', transcript);
+  }
+
+  doc.save(`Medical_Summary_${uhid}_${new Date().toISOString().split('T')[0]}.pdf`);
 }
 
 // ---------------------- Bootstrapping ----------------------
