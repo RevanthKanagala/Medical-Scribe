@@ -13,4 +13,3 @@ assemblyai==0.46.0
 databases
 aiosqlite
 ngrok
-pydub

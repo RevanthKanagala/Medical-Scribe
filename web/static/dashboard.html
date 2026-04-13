@@ -11,6 +11,27 @@
       background: #0f172a;
       color: #e2e8f0;
     }
+    .home-link-floating {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.96);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #f8fafc;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 12px 28px rgba(2,6,23,0.42);
+    }
+    .home-link-floating:hover {
+      border-color: rgba(255,255,255,0.4);
+    }
     .dashboard-shell {
       min-height: 100vh;
       padding: 40px;
@@ -76,6 +97,74 @@
       font-size: 2rem;
       font-weight: 700;
     }
+    .kpi-hover-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .kpi-hover-link {
+      font: inherit;
+      font-size: 0.5em;
+      font-weight: 600;
+      color: #f8fafc;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: default;
+    }
+    .kpi-tooltip {
+      position: absolute;
+      left: 0;
+      top: calc(100% + 12px);
+      width: min(420px, 78vw);
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(248,250,252,0.14);
+      background: rgba(15,23,42,0.97);
+      box-shadow: 0 18px 48px rgba(2,6,23,0.55);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(4px);
+      transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+      z-index: 20;
+    }
+    .kpi-hover-wrap:hover .kpi-tooltip,
+    .kpi-hover-wrap:focus-within .kpi-tooltip {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+    .tooltip-title {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      color: #f8fafc;
+    }
+    .tooltip-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .tooltip-item {
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(148,163,184,0.18);
+    }
+    .tooltip-item:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+    .tooltip-item strong {
+      color: #f8fafc;
+    }
+    .tooltip-meta {
+      margin-top: 4px;
+      color: #cbd5e1;
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+    .tooltip-empty {
+      color: #cbd5e1;
+      font-size: 0.85rem;
+    }
     .badge {
       display: inline-flex;
       align-items: center;
@@ -137,6 +226,10 @@
   </style>
 </head>
 <body>
+  <a class="home-link-floating" href="index.html" aria-label="Home">
+    <span>🏠</span>
+    <span>Home</span>
+  </a>
   <div class="dashboard-shell">
     <div class="dashboard-header">
       <div>
@@ -216,10 +309,59 @@
 
     const formatHour = (hour) => `${String(hour).padStart(2, '0')}:00`;
 
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function renderHighRiskHover(details) {
+      if (!details || !details.length) {
+        return '<div class="kpi-tooltip"><p class="tooltip-empty">No high-risk case details available.</p></div>';
+      }
+
+      const items = details.slice(0, 8).map((item) => {
+        const patient = escapeHtml(item.patient_name || 'Unknown Patient');
+        const uhid = escapeHtml(item.patient_uhid || 'N/A');
+        const doctor = escapeHtml(item.doctor_name || 'Unknown Doctor');
+        const department = escapeHtml(item.doctor_department || 'Department N/A');
+        const reason = escapeHtml(item.risk_reason || 'Flagged for review');
+        const when = item.visit_datetime ? new Date(item.visit_datetime).toLocaleString() : 'N/A';
+        const symptoms = item.symptoms && item.symptoms.length
+          ? escapeHtml(item.symptoms.join(', '))
+          : 'No symptom names saved';
+
+        return `
+          <div class="tooltip-item">
+            <strong>${patient}</strong>
+            <div class="tooltip-meta">UHID: ${uhid}</div>
+            <div class="tooltip-meta">Doctor: ${doctor} (${department})</div>
+            <div class="tooltip-meta">Visit: ${escapeHtml(when)}</div>
+            <div class="tooltip-meta">Reason: ${reason}</div>
+            <div class="tooltip-meta">Symptoms: ${symptoms}</div>
+          </div>`;
+      }).join('');
+
+      return `
+        <div class="kpi-tooltip">
+          <p class="tooltip-title">High-risk case details</p>
+          <div class="tooltip-list">${items}</div>
+        </div>`;
+    }
+
     function renderCriticalAlerts(alerts) {
       criticalAlertsEl.innerHTML = '';
       const configs = [
-        { label: 'High Risk Cases', value: alerts.high_risk_cases ?? 0, status: 'red', note: 'Symptom load ≥4' },
+        {
+          label: 'High Risk Cases',
+          value: alerts.high_risk_cases ?? 0,
+          status: 'red',
+          note: 'Symptom load ≥4',
+          hoverDetails: alerts.high_risk_case_details || []
+        },
         { label: 'Validation Warnings', value: alerts.validation_failures ?? 0, status: 'yellow', note: 'Summary vs symptom mismatch' },
         { label: 'Pending Summaries', value: alerts.pending_summaries ?? 0, status: 'yellow', note: 'Transcripts awaiting summaries' },
         { label: 'Unknown Mentions', value: alerts.unknown_mention_cases ?? 0, status: 'red', note: 'Needs review' }
@@ -227,9 +369,12 @@
       configs.forEach(alert => {
         const card = document.createElement('div');
         card.className = 'panel kpi-card';
+        const valueMarkup = alert.hoverDetails
+          ? `<div class="kpi-value"><span class="kpi-hover-wrap">${alert.value}<span class="kpi-hover-link">view</span>${renderHighRiskHover(alert.hoverDetails)}</span></div>`
+          : `<div class="kpi-value">${alert.value}</div>`;
         card.innerHTML = `
           <div class="badge ${alert.status}">${alert.label}</div>
-          <div class="kpi-value">${alert.value}</div>
+          ${valueMarkup}
           <p class="muted">${alert.note}</p>`;
         criticalAlertsEl.appendChild(card);
       });

@@ -6,6 +6,10 @@
   <link rel="stylesheet" href="css/main.css">
 </head>
 <body data-step="consultation">
+  <a class="home-link-floating" href="index.html" aria-label="Home">
+    <span class="home-link-icon">🏠</span>
+    <span>Home</span>
+  </a>
   <div class="container">
     <div class="header">
       <div class="header-left">
@@ -22,6 +26,19 @@
 
     <div class="card">
       <h2><span class="section-icon">🎙️</span> Record Consultation</h2>
+      <div class="audio-input-panel">
+        <div class="form-group audio-input-group">
+          <label for="audioInputSelect">Microphone Input</label>
+          <select id="audioInputSelect">
+            <option value="">Default microphone</option>
+          </select>
+        </div>
+        <button class="btn btn-upload" id="refreshMicBtn" type="button"><span>↻</span> Detect Microphones</button>
+        <div class="mic-meter" aria-live="polite">
+          <div class="mic-meter-label" id="micMeterLabel">Microphone level unavailable</div>
+          <div class="mic-meter-track"><div class="mic-meter-fill" id="micMeterFill"></div></div>
+        </div>
+      </div>
       <div class="recording-section">
         <button class="btn btn-success" id="startBtn" type="button"><span>▶</span> Start Recording</button>
         <button class="btn btn-danger" id="stopBtn" type="button" disabled><span>⏹</span> Stop Recording</button>

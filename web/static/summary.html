@@ -6,6 +6,10 @@
   <link rel="stylesheet" href="css/main.css">
 </head>
 <body data-step="summary">
+  <a class="home-link-floating" href="index.html" aria-label="Home">
+    <span class="home-link-icon">🏠</span>
+    <span>Home</span>
+  </a>
   <div class="container">
     <div class="header">
       <div class="header-left">
@@ -33,6 +37,12 @@
       <h2><span class="section-icon">🛡️</span> Symptom Consistency Check</h2>
       <div id="validationStatus" class="validation-status">Run a summary to view validation details.</div>
       <div id="validationDetails" class="validation-details"></div>
+    </div>
+
+    <div class="card hidden" id="transcriptReferenceCard">
+      <h2><span class="section-icon">🧾</span> Transcript Reference</h2>
+      <div class="transcript-reference-meta" id="transcriptReferenceMeta">No transcript match selected.</div>
+      <div class="transcript-reference-body" id="transcriptReferenceBody"></div>
     </div>
 
     <div class="card">

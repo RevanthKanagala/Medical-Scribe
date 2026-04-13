@@ -9,6 +9,35 @@ body {
   padding: 20px;
 }
 
+.home-link-floating {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #111827;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(8px);
+}
+
+.home-link-floating:hover {
+  transform: translateY(-1px);
+}
+
+.home-link-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
 .container { max-width: 1600px; margin: 0 auto; }
 
 .header {
@@ -207,6 +236,48 @@ textarea.large {
   margin-bottom: 20px;
 }
 
+.audio-input-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto minmax(240px, 320px);
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  background: #f7fafc;
+  border-radius: 15px;
+}
+
+.audio-input-group {
+  margin: 0;
+}
+
+.mic-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mic-meter-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.mic-meter-track {
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);
+}
+
+.mic-meter-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #48bb78 0%, #ecc94b 60%, #f56565 100%);
+  transition: width 0.08s linear;
+}
+
 .status {
   padding: 10px 20px;
   border-radius: 25px;
@@ -355,6 +426,83 @@ textarea.large {
 .validation-details li {
   margin-bottom: 4px;
 }
+
+.summary-symptom-links,
+.validation-details ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.summary-symptom-links li,
+.validation-details li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: white;
+  margin-bottom: 8px;
+}
+
+.transcript-jump-btn {
+  border: none;
+  background: transparent;
+  color: #8aa4ff;
+  border-radius: 6px;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.transcript-jump-btn:hover {
+  background: transparent;
+  color: #4c6fff;
+  text-decoration: underline;
+}
+
+.transcript-jump-btn:focus-visible {
+  outline: 2px solid #a3bffa;
+  outline-offset: 2px;
+}
+
+.transcript-jump-icon {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.transcript-reference-meta {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.transcript-reference-body {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px;
+  color: #374151;
+  line-height: 1.8;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.transcript-highlight {
+  background: #fbbf24;
+  color: inherit;
+  padding: 1px 2px;
+  border-radius: 4px;
+}
 .symptom-list { list-style: none; }
 
 .symptom-list li {
@@ -413,4 +561,5 @@ textarea.large {
   .header { flex-direction: column; text-align: center; }
   .header-right { text-align: center; margin-top: 15px; }
   .progress-link { flex: 1 1 45%; }
+  .audio-input-panel { grid-template-columns: 1fr; align-items: stretch; }
 }

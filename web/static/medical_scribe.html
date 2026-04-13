@@ -12,6 +12,25 @@
       min-height: 100vh;
       padding: 20px;
     }
+    .home-link-floating {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.96);
+      color: #111827;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.45);
+      backdrop-filter: blur(8px);
+    }
     
     .container { max-width: 1600px; margin: 0 auto; }
     
@@ -342,6 +361,10 @@
   </style>
 </head>
 <body>
+  <a class="home-link-floating" href="index.html" aria-label="Home">
+    <span>🏠</span>
+    <span>Home</span>
+  </a>
   <div class="container">
     <div class="header">
       <div class="header-left">

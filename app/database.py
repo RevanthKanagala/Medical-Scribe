@@ -17,6 +17,61 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / 'medical_scribe.db'
 
 
+def _clean_text(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = ' '.join(str(value).strip().split())
+    return cleaned or None
+
+
+def _normalize_doctor_name(name: Optional[str]) -> Optional[str]:
+    cleaned = _clean_text(name)
+    if not cleaned:
+        return None
+
+    lower = cleaned.lower()
+    if lower.startswith('dr '):
+        cleaned = f"Dr. {cleaned[3:].strip()}"
+    elif lower.startswith('dr.'):
+        cleaned = f"Dr. {cleaned[3:].strip()}"
+
+    return cleaned
+
+
+def _normalize_patient_type(patient_type: Optional[str]) -> Optional[str]:
+    cleaned = _clean_text(patient_type)
+    if not cleaned:
+        return None
+
+    normalized = cleaned.lower().replace('_', '-').replace(' ', '-')
+    patient_type_map = {
+        'opd': 'Out-Patient',
+        'out-patient': 'Out-Patient',
+        'outpatient': 'Out-Patient',
+        'ipd': 'In-Patient',
+        'in-patient': 'In-Patient',
+        'inpatient': 'In-Patient',
+        'er': 'Emergency',
+        'ed': 'Emergency',
+        'emergency': 'Emergency',
+    }
+    return patient_type_map.get(normalized, cleaned)
+
+
+def normalize_doctor_payload(data: Optional[dict]) -> Optional[Dict]:
+    if not data:
+        return None
+
+    return {
+        'name': _normalize_doctor_name(data.get('name')),
+        'department': _clean_text(data.get('department')),
+        'designation': _clean_text(data.get('designation')),
+        'patientType': _normalize_patient_type(
+            data.get('patientType', data.get('patient_type'))
+        ),
+    }
+
+
 def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -132,14 +187,15 @@ def generate_next_uhid() -> str:
 
 
 def upsert_doctor(data: Optional[dict]) -> Optional[Dict]:
-    if not data or not data.get('name'):
+    normalized = normalize_doctor_payload(data)
+    if not normalized or not normalized.get('name'):
         return None
 
     params = (
-        data.get('name'),
-        data.get('department'),
-        data.get('designation'),
-        data.get('patientType'),
+        normalized.get('name'),
+        normalized.get('department'),
+        normalized.get('designation'),
+        normalized.get('patientType'),
     )
     with get_connection() as conn:
         row = conn.execute(
@@ -221,6 +277,99 @@ def upsert_patient(data: Optional[dict]) -> Optional[Dict]:
 
         updated = conn.execute('SELECT * FROM patients WHERE uhid = ?', (uhid,)).fetchone()
         return dict(updated) if updated else None
+
+
+def merge_doctors(
+    *,
+    source_ids: List[int],
+    canonical_name: str,
+    canonical_department: str,
+    canonical_designation: str,
+    canonical_patient_type: str,
+) -> Dict:
+    normalized = normalize_doctor_payload({
+        'name': canonical_name,
+        'department': canonical_department,
+        'designation': canonical_designation,
+        'patientType': canonical_patient_type,
+    })
+    if not normalized or not normalized.get('name'):
+        raise ValueError('Canonical doctor information is incomplete')
+
+    unique_source_ids = sorted({int(doc_id) for doc_id in source_ids})
+    if not unique_source_ids:
+        raise ValueError('No source doctor ids provided')
+
+    with get_connection() as conn:
+        placeholders = ', '.join('?' for _ in unique_source_ids)
+        source_rows = conn.execute(
+            f'SELECT * FROM doctors WHERE id IN ({placeholders})',
+            tuple(unique_source_ids),
+        ).fetchall()
+        if not source_rows:
+            raise ValueError('No matching doctor records found for merge')
+
+        existing_canonical = conn.execute(
+            """SELECT * FROM doctors
+               WHERE name = ?
+               AND COALESCE(department, '') = COALESCE(?, '')
+               AND COALESCE(designation, '') = COALESCE(?, '')
+               AND COALESCE(patient_type, '') = COALESCE(?, '')""",
+            (
+                normalized['name'],
+                normalized['department'],
+                normalized['designation'],
+                normalized['patientType'],
+            ),
+        ).fetchone()
+
+        if existing_canonical:
+            canonical_id = existing_canonical['id']
+            conn.execute(
+                """UPDATE doctors
+                   SET name = ?, department = ?, designation = ?, patient_type = ?
+                   WHERE id = ?""",
+                (
+                    normalized['name'],
+                    normalized['department'],
+                    normalized['designation'],
+                    normalized['patientType'],
+                    canonical_id,
+                ),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO doctors (name, department, designation, patient_type, created_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    normalized['name'],
+                    normalized['department'],
+                    normalized['designation'],
+                    normalized['patientType'],
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+            canonical_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+
+        merge_ids = [doc_id for doc_id in unique_source_ids if doc_id != canonical_id]
+        consultations_reassigned = 0
+        if merge_ids:
+            merge_placeholders = ', '.join('?' for _ in merge_ids)
+            consultations_reassigned = conn.execute(
+                f'UPDATE consultations SET doctor_id = ? WHERE doctor_id IN ({merge_placeholders})',
+                (canonical_id, *merge_ids),
+            ).rowcount
+            conn.execute(
+                f'DELETE FROM doctors WHERE id IN ({merge_placeholders})',
+                tuple(merge_ids),
+            )
+
+        canonical_row = conn.execute('SELECT * FROM doctors WHERE id = ?', (canonical_id,)).fetchone()
+        return {
+            'canonical_doctor': dict(canonical_row) if canonical_row else None,
+            'merged_doctor_ids': merge_ids,
+            'consultations_reassigned': consultations_reassigned,
+        }
 
 
 def add_consultation_record(

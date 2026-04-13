@@ -6,11 +6,22 @@ const STORAGE_KEYS = {
   summary: 'aims_summary',
   symptoms: 'aims_symptoms',
   consultationId: 'aims_consultation_id',
-  validation: 'aims_validation'
+  validation: 'aims_validation',
+  transcript: 'aims_transcript',
+  transcriptFocus: 'aims_transcript_focus',
+  appDataVersion: 'aims_app_data_version'
 };
+
+const APP_DATA_VERSION = '2026-04-12-symptom-normalization-v2';
 
 let mediaRecorder;
 let recordedChunks = [];
+let recordedMimeType = 'audio/webm';
+let recordingStartedAt = 0;
+let monitorStream;
+let monitorAudioContext;
+let monitorAnalyser;
+let monitorAnimationFrame;
 let existingPatientUhid = '';
 
 const navSteps = [
@@ -38,6 +49,148 @@ function updateHeaderClock() {
     day: '2-digit', month: 'short', year: 'numeric'
   });
   headerTimeElement.textContent = `${dateStr} • ${timeStr}`;
+}
+
+function getSupportedRecordingMimeType() {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+    return '';
+  }
+
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/mp4'
+  ];
+
+  return candidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
+}
+
+function getSelectedAudioDeviceId() {
+  return document.getElementById('audioInputSelect')?.value || '';
+}
+
+function getAudioConstraints() {
+  const deviceId = getSelectedAudioDeviceId();
+  if (deviceId) {
+    return {
+      deviceId: { exact: deviceId },
+      channelCount: 1
+    };
+  }
+  return true;
+}
+
+function updateMicMeter(level = 0, label = 'Microphone level unavailable') {
+  const meterFill = document.getElementById('micMeterFill');
+  const meterLabel = document.getElementById('micMeterLabel');
+  if (meterFill) meterFill.style.width = `${Math.max(0, Math.min(100, level))}%`;
+  if (meterLabel) meterLabel.textContent = label;
+}
+
+function stopMicMonitor() {
+  if (monitorAnimationFrame) {
+    cancelAnimationFrame(monitorAnimationFrame);
+    monitorAnimationFrame = null;
+  }
+  if (monitorStream) {
+    monitorStream.getTracks().forEach(track => track.stop());
+    monitorStream = null;
+  }
+  if (monitorAudioContext) {
+    monitorAudioContext.close().catch(() => {});
+    monitorAudioContext = null;
+  }
+  monitorAnalyser = null;
+  updateMicMeter(0, 'Microphone level unavailable');
+}
+
+function startMicMonitor(stream) {
+  stopMicMonitor();
+  monitorStream = stream;
+  monitorAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const source = monitorAudioContext.createMediaStreamSource(stream);
+  monitorAnalyser = monitorAudioContext.createAnalyser();
+  monitorAnalyser.fftSize = 2048;
+  source.connect(monitorAnalyser);
+  const buffer = new Uint8Array(monitorAnalyser.fftSize);
+
+  const tick = () => {
+    if (!monitorAnalyser) return;
+    monitorAnalyser.getByteTimeDomainData(buffer);
+    let sumSquares = 0;
+    for (let i = 0; i < buffer.length; i += 1) {
+      const centered = (buffer[i] - 128) / 128;
+      sumSquares += centered * centered;
+    }
+    const rms = Math.sqrt(sumSquares / buffer.length);
+    const level = Math.min(100, Math.round(rms * 280));
+    let label = 'Microphone active, but input is very low';
+    if (level > 35) {
+      label = 'Microphone input looks healthy';
+    } else if (level > 12) {
+      label = 'Microphone input detected';
+    }
+    updateMicMeter(level, label);
+    monitorAnimationFrame = requestAnimationFrame(tick);
+  };
+
+  tick();
+}
+
+async function populateAudioInputs(requestPermission = false) {
+  let permissionStream = null;
+  try {
+    if (requestPermission) {
+      permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+
+    const select = document.getElementById('audioInputSelect');
+    if (!select || !navigator.mediaDevices?.enumerateDevices) {
+      return;
+    }
+
+    const currentValue = select.value;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioInputs = devices.filter(device => device.kind === 'audioinput');
+
+    select.innerHTML = '';
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Default microphone';
+    select.appendChild(defaultOption);
+
+    audioInputs.forEach((device, index) => {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.textContent = device.label || `Microphone ${index + 1}`;
+      select.appendChild(option);
+    });
+
+    if ([...select.options].some(option => option.value === currentValue)) {
+      select.value = currentValue;
+    }
+  } catch (err) {
+    showToast(`Unable to access microphone list: ${err.message}`);
+  } finally {
+    if (permissionStream) {
+      permissionStream.getTracks().forEach(track => track.stop());
+    }
+  }
+}
+
+async function refreshMicMonitor() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    updateMicMeter(0, 'Microphone monitoring is not supported in this browser');
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: getAudioConstraints() });
+    startMicMonitor(stream);
+  } catch (err) {
+    updateMicMeter(0, 'Unable to read from the selected microphone');
+  }
 }
 
 function startHeaderClock() {
@@ -92,6 +245,24 @@ function getSymptomsData() {
   return readFromStorage(STORAGE_KEYS.symptoms);
 }
 
+function setTranscriptData(text) {
+  saveToStorage(STORAGE_KEYS.transcript, text || '');
+}
+
+function getTranscriptData() {
+  return readFromStorage(STORAGE_KEYS.transcript) || '';
+}
+
+function setTranscriptFocus(query) {
+  saveToStorage(STORAGE_KEYS.transcriptFocus, query || '');
+}
+
+function consumeTranscriptFocus() {
+  const query = readFromStorage(STORAGE_KEYS.transcriptFocus) || '';
+  localStorage.removeItem(STORAGE_KEYS.transcriptFocus);
+  return query;
+}
+
 function setValidationData(data) {
   saveToStorage(STORAGE_KEYS.validation, data);
 }
@@ -110,6 +281,140 @@ function getConsultationId() {
 
 function showToast(message) {
   alert(message);
+}
+
+function isLowInformationTranscript(text) {
+  const normalized = (text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!normalized) return true;
+
+  const meaninglessPhrases = new Set([
+    'you',
+    'you you',
+    'you you you',
+    'thank you',
+    'thanks',
+    'ok',
+    'okay'
+  ]);
+  if (meaninglessPhrases.has(normalized)) return true;
+
+  const tokens = normalized.split(' ').filter(Boolean);
+  if (tokens.length <= 3 && new Set(tokens).size === 1) return true;
+  return normalized.length < 12;
+}
+
+function clearGeneratedConsultationArtifacts() {
+  localStorage.removeItem(STORAGE_KEYS.summary);
+  localStorage.removeItem(STORAGE_KEYS.symptoms);
+  localStorage.removeItem(STORAGE_KEYS.validation);
+  localStorage.removeItem(STORAGE_KEYS.consultationId);
+  localStorage.removeItem(STORAGE_KEYS.transcriptFocus);
+}
+
+function ensureCurrentAppDataVersion() {
+  const savedVersion = localStorage.getItem(STORAGE_KEYS.appDataVersion);
+  if (savedVersion === APP_DATA_VERSION) {
+    return;
+  }
+  clearGeneratedConsultationArtifacts();
+  localStorage.setItem(STORAGE_KEYS.appDataVersion, APP_DATA_VERSION);
+}
+
+function createTranscriptJumpButton(query) {
+  if (!query) return null;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'transcript-jump-btn';
+  button.innerHTML = '<span class="transcript-jump-icon">🔎</span><span>Find in transcript</span>';
+  button.title = `Jump to "${query}" in the transcript`;
+  button.addEventListener('click', () => jumpToTranscript(query));
+  return button;
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildTranscriptReferenceMarkup(transcript, query) {
+  if (!transcript) {
+    return { markup: '<p>No transcript available.</p>', matchCount: 0 };
+  }
+
+  const escapedTranscript = escapeHtml(transcript);
+  if (!query) {
+    return { markup: escapedTranscript, matchCount: 0 };
+  }
+
+  const escapedQuery = escapeHtml(query);
+  const pattern = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(pattern, 'gi');
+  let matchCount = 0;
+  const markup = escapedTranscript.replace(regex, match => {
+    matchCount += 1;
+    return `<mark class="transcript-highlight">${escapeHtml(match)}</mark>`;
+  });
+  return { markup, matchCount, query: escapedQuery };
+}
+
+function showTranscriptReference(query) {
+  const card = document.getElementById('transcriptReferenceCard');
+  const meta = document.getElementById('transcriptReferenceMeta');
+  const body = document.getElementById('transcriptReferenceBody');
+  if (!card || !meta || !body) {
+    return false;
+  }
+
+  const transcript = getTranscriptData();
+  const { markup, matchCount } = buildTranscriptReferenceMarkup(transcript, query);
+  card.classList.remove('hidden');
+  meta.textContent = query
+    ? `Showing ${matchCount} match(es) for "${query}" in transcript.`
+    : 'Transcript loaded.';
+  body.innerHTML = markup;
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return matchCount > 0;
+}
+
+function highlightTranscriptMatch(query) {
+  const transcriptField = document.getElementById('transcript');
+  if (!transcriptField || !query) return false;
+
+  const transcriptValue = transcriptField.value || '';
+  const startIndex = transcriptValue.toLowerCase().indexOf(query.toLowerCase());
+  if (startIndex === -1) return false;
+
+  const endIndex = startIndex + query.length;
+  transcriptField.focus();
+  transcriptField.setSelectionRange(startIndex, endIndex);
+  const lineHeight = parseInt(window.getComputedStyle(transcriptField).lineHeight, 10) || 22;
+  const linesBefore = transcriptValue.slice(0, startIndex).split('\n').length - 1;
+  transcriptField.scrollTop = Math.max(0, (linesBefore - 2) * lineHeight);
+  return true;
+}
+
+function jumpToTranscript(query) {
+  if (!query) return;
+  setTranscriptFocus(query);
+  const isConsultationPage = document.body.dataset.step === 'consultation';
+  const isSummaryPage = document.body.dataset.step === 'summary';
+  if (isConsultationPage) {
+    if (!highlightTranscriptMatch(query)) {
+      showToast(`Could not find "${query}" in the transcript.`);
+    }
+    return;
+  }
+  if (isSummaryPage) {
+    if (!showTranscriptReference(query)) {
+      showToast(`Could not find "${query}" in the transcript.`);
+    }
+    return;
+  }
+  window.location.href = 'consultation.html';
 }
 
 function composeSummaryWithContext(summaryText) {
@@ -470,19 +775,40 @@ async function savePatientFromForm(form) {
 function setupConsultationPage() {
   const transcriptField = document.getElementById('transcript');
   if (!transcriptField) return;
+  const savedTranscript = getTranscriptData();
+  if (savedTranscript && !transcriptField.value) {
+    transcriptField.value = savedTranscript;
+  }
 
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
   const fileInput = document.getElementById('fileInput');
+  const micSelect = document.getElementById('audioInputSelect');
+  const refreshMicBtn = document.getElementById('refreshMicBtn');
   if (startBtn) startBtn.addEventListener('click', startRecording);
   if (stopBtn) stopBtn.addEventListener('click', stopRecording);
   if (fileInput) fileInput.addEventListener('change', handleAudioUpload);
+  if (micSelect) micSelect.addEventListener('change', refreshMicMonitor);
+  if (refreshMicBtn) refreshMicBtn.addEventListener('click', async () => {
+    await populateAudioInputs(true);
+    await refreshMicMonitor();
+  });
 
   const summaryBtn = document.getElementById('generateSummaryBtn');
   if (summaryBtn) summaryBtn.addEventListener('click', generateSummary);
 
   const goSummaryBtn = document.getElementById('goToSummaryBtn');
   if (goSummaryBtn) goSummaryBtn.addEventListener('click', () => window.location.href = 'summary.html');
+
+  populateAudioInputs();
+  const pendingTranscriptFocus = consumeTranscriptFocus();
+  if (pendingTranscriptFocus) {
+    setTimeout(() => {
+      if (!highlightTranscriptMatch(pendingTranscriptFocus)) {
+        showToast(`Could not find "${pendingTranscriptFocus}" in the transcript.`);
+      }
+    }, 100);
+  }
 }
 
 async function startRecording() {
@@ -490,16 +816,36 @@ async function startRecording() {
     return;
   }
 
+  if (typeof MediaRecorder === 'undefined') {
+    showToast('This browser does not support audio recording.');
+    return;
+  }
+
   toggleRecordingState(true);
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
+    stopMicMonitor();
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: getAudioConstraints() });
+    await populateAudioInputs(true);
+    const mimeType = getSupportedRecordingMimeType();
+    const options = mimeType ? { mimeType, audioBitsPerSecond: 128000 } : undefined;
+    mediaRecorder = options ? new MediaRecorder(stream, options) : new MediaRecorder(stream);
     recordedChunks = [];
-    mediaRecorder.ondataavailable = event => recordedChunks.push(event.data);
-    mediaRecorder.onstop = uploadRecording;
-    mediaRecorder.start();
+    recordedMimeType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+    recordingStartedAt = Date.now();
+    mediaRecorder.ondataavailable = event => {
+      if (event.data && event.data.size > 0) {
+        recordedChunks.push(event.data);
+      }
+    };
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(track => track.stop());
+      await uploadRecording();
+      await refreshMicMonitor();
+    };
+    mediaRecorder.start(1000);
   } catch (err) {
     toggleRecordingState(false);
+    await refreshMicMonitor();
     showToast('Microphone access denied: ' + err.message);
   }
 }
@@ -507,6 +853,10 @@ async function startRecording() {
 function stopRecording() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     toggleRecordingState('processing');
+    try {
+      mediaRecorder.requestData();
+    } catch (err) {
+    }
     mediaRecorder.stop();
   }
 }
@@ -561,25 +911,40 @@ function toggleRecordingState(state) {
 }
 
 async function uploadRecording() {
-  if (!recordedChunks.length) {
+  const durationMs = recordingStartedAt ? Date.now() - recordingStartedAt : 0;
+  if (!recordedChunks.length || durationMs < 1000) {
+    recordedChunks = [];
     toggleRecordingState(false);
+    showToast('Recording was too short. Please speak for at least a second and try again.');
     return;
   }
-  const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+  const blobType = recordedMimeType || 'audio/webm';
+  const extension = blobType.includes('ogg') ? 'ogg' : blobType.includes('mp4') ? 'mp4' : 'webm';
+  const blob = new Blob(recordedChunks, { type: blobType });
   const fd = new FormData();
-  fd.append('file', blob, 'recording.webm');
+  fd.append('file', blob, `recording.${extension}`);
   try {
     const res = await fetch('/upload', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.error) {
+      clearGeneratedConsultationArtifacts();
       showToast(data.error);
+      return;
+    }
+    if (!data.transcript || !data.transcript.trim()) {
+      clearGeneratedConsultationArtifacts();
+      showToast('No speech was detected. Try a longer recording and verify the active microphone.');
       return;
     }
     const transcriptField = document.getElementById('transcript');
     if (transcriptField) transcriptField.value = data.transcript || '';
+    setTranscriptData(data.transcript || '');
   } catch (err) {
+    clearGeneratedConsultationArtifacts();
     showToast('Upload failed: ' + err.message);
   } finally {
+    recordedChunks = [];
+    recordingStartedAt = 0;
     toggleRecordingState(false);
   }
 }
@@ -593,8 +958,13 @@ async function handleAudioUpload(event) {
     const res = await fetch('/upload', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.error) return showToast(data.error);
+    if (!data.transcript || !data.transcript.trim()) {
+      clearGeneratedConsultationArtifacts();
+      return showToast('No speech was detected in the uploaded file.');
+    }
     const transcriptField = document.getElementById('transcript');
     if (transcriptField) transcriptField.value = data.transcript || '';
+    setTranscriptData(data.transcript || '');
   } catch (err) {
     showToast('Upload failed: ' + err.message);
   }
@@ -603,8 +973,14 @@ async function handleAudioUpload(event) {
 async function generateSummary() {
   const transcript = document.getElementById('transcript')?.value;
   if (!transcript) {
+    clearGeneratedConsultationArtifacts();
     return showToast('Transcript is empty.');
   }
+  if (isLowInformationTranscript(transcript)) {
+    clearGeneratedConsultationArtifacts();
+    return showToast('Transcript quality is too low to summarize. Re-record with the correct microphone and clear speech.');
+  }
+  setTranscriptData(transcript);
   const doctor = getDoctorInfo();
   const patient = getPatientInfo();
   if (!doctor || !patient) {
@@ -621,6 +997,7 @@ async function generateSummary() {
     const res = await fetch('/summarize', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.error) {
+      clearGeneratedConsultationArtifacts();
       showToast(data.error);
       return;
     }
@@ -631,13 +1008,15 @@ async function generateSummary() {
     setSummaryData(finalSummary);
     setSymptomsData({
       validated: data.symptoms_present,
-      unknown: data.unknown_mentions
+      unknown: data.unknown_mentions,
+      summaryItems: (data.summary_validation && data.summary_validation.summary_items) || []
     });
     setValidationData(data.summary_validation || null);
     setConsultationId(data.consultation_id);
     showToast('Summary generated successfully.');
     window.location.href = 'summary.html';
   } catch (err) {
+    clearGeneratedConsultationArtifacts();
     showToast('Summary failed: ' + err.message);
   }
 }
@@ -658,7 +1037,11 @@ function renderSymptoms(validated, unknown) {
   if (validated && validated.length) {
     validated.forEach(item => {
       const li = document.createElement('li');
-      li.innerHTML = `<span><strong>${item.name}</strong> (${item.code}) - ${item.category}</span>`;
+      const label = document.createElement('span');
+      label.innerHTML = `<strong>${item.name}</strong> (${item.code}) - ${item.category}`;
+      li.appendChild(label);
+      const jumpButton = createTranscriptJumpButton(item.matched_text || item.name);
+      if (jumpButton) li.appendChild(jumpButton);
       validList.appendChild(li);
     });
   } else {
@@ -674,6 +1057,21 @@ function renderSymptoms(validated, unknown) {
   } else {
     unknownList.innerHTML = '<li>No unknown mentions</li>';
   }
+}
+
+function renderSummarySymptomLinks(summaryItems) {
+  if (!summaryItems || !summaryItems.length) {
+    return '<section><h4>Symptoms extracted from summary</h4><p>No summary symptoms were extracted.</p></section>';
+  }
+
+  const listItems = summaryItems.map(item => {
+    const label = item.matched_symptom_name
+      ? `${item.summary_text} -> ${item.matched_symptom_name}`
+      : item.summary_text;
+    return `<li><span>${label}</span></li>`;
+  }).join('');
+
+  return `<section><h4>Symptoms extracted from summary</h4><ul class="summary-symptom-links">${listItems}</ul></section>`;
 }
 
 function renderValidationResult(validation) {
@@ -697,6 +1095,7 @@ function renderValidationResult(validation) {
   statusEl.className = `validation-status ${isValid ? 'status-ok' : 'status-warn'}`;
 
   let detailsHtml = '';
+  detailsHtml += renderSummarySymptomLinks(validation.summary_items || []);
   if (validation.missing_symptoms && validation.missing_symptoms.length) {
     const list = validation.missing_symptoms.map(item => `<li>${item}</li>`).join('');
     detailsHtml += `<section><h4>Symptoms not represented in summary</h4><ul>${list}</ul></section>`;
@@ -730,6 +1129,11 @@ function setupSummaryPage() {
   }
 
   renderValidationResult(getValidationData());
+
+  const pendingTranscriptFocus = consumeTranscriptFocus();
+  if (pendingTranscriptFocus) {
+    showTranscriptReference(pendingTranscriptFocus);
+  }
 }
 
 function downloadSummary() {
@@ -752,6 +1156,7 @@ function downloadSummary() {
 
 // ---------------------- Bootstrapping ----------------------
 document.addEventListener('DOMContentLoaded', () => {
+  ensureCurrentAppDataVersion();
   populateProgressNav();
   const step = document.body.dataset.step || 'doctor';
   setActiveNav(step);

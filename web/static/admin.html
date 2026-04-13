@@ -30,6 +30,28 @@
       font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       padding: 32px 20px 48px;
     }
+    .home-link-floating {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(12,20,38,0.96);
+      border: 1px solid var(--border);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 12px 28px rgba(2,6,23,0.42);
+    }
+    .home-link-floating:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
     .admin-shell {
       max-width: 1200px;
       margin: 0 auto;
@@ -221,6 +243,10 @@
   </style>
 </head>
 <body>
+  <a class="home-link-floating" href="index.html" aria-label="Home">
+    <span>🏠</span>
+    <span>Home</span>
+  </a>
   <div class="admin-shell">
     <header>
       <span class="pill">Admin Control Room</span>
@@ -253,8 +279,8 @@
           <label>
             <span>Patient Type</span>
             <select name="patient_type">
-              <option value="OPD" selected>OPD</option>
-              <option value="IPD">IPD</option>
+              <option value="Out-Patient" selected>Out-Patient (OPD)</option>
+              <option value="In-Patient">In-Patient (IPD)</option>
               <option value="Emergency">Emergency</option>
             </select>
           </label>

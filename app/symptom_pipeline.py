@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Set, Tuple
 from dataclasses import dataclass, asdict
+from collections import defaultdict
 
 # Setup logging
 logging.basicConfig(
@@ -31,6 +32,77 @@ logger = logging.getLogger('AIMS_SymptomPipeline')
 LOGS_DIR = Path(__file__).parent.parent / 'logs'
 LOGS_DIR.mkdir(exist_ok=True)
 UNKNOWN_SYMPTOMS_LOG = LOGS_DIR / 'unknown_symptoms.csv'
+
+TOKEN_NORMALIZATIONS = {
+    'abdomen': 'abdominal',
+    'stomach': 'abdominal',
+    'belly': 'abdominal',
+    'tummy': 'abdominal',
+    'lumbar': 'back',
+    'pains': 'pain',
+    'painful': 'pain',
+    'ache': 'pain',
+    'aches': 'pain',
+    'aching': 'pain',
+    'soreness': 'pain',
+    'sore': 'pain',
+    'breathing': 'breath',
+    'breathe': 'breath',
+    'breathlessness': 'breath',
+    'constipated': 'constipation',
+    'pooping': 'stool',
+    'toilet': 'stool',
+}
+
+OPTIONAL_MODIFIERS = {
+    'sharp', 'dull', 'burning', 'upper', 'lower', 'low', 'left', 'right',
+    'severe', 'mild', 'chronic', 'acute', 'bad', 'really', 'generalized'
+}
+
+CONTEXTUAL_SYMPTOM_RULES = [
+    (r'(?:trouble|struggling|difficulty|hard)\s+(?:going|to go|passing)\s+(?:to\s+the\s+)?(?:toilet|stool|bowel|bowels|bowel movement)', 'constipation'),
+    (r'(?:unable|cannot|can\'t)\s+to\s+(?:go|pass)\s+(?:to\s+the\s+)?(?:toilet|stool|bowel|bowels)', 'constipation'),
+    (r'(?:stomach|belly|abdomen|abdominal)\s+(?:pain|pains|ache|aches)', 'abdominal pain'),
+    (r'(?:lower\s+back|back)\s+(?:pain|ache|aches)', 'back pain'),
+]
+
+
+def _normalize_whitespace(text: str) -> str:
+    return ' '.join(text.split())
+
+
+def normalize_phrase(text: str) -> str:
+    cleaned = re.sub(r'[^a-z0-9\s]', ' ', (text or '').lower())
+    return _normalize_whitespace(cleaned)
+
+
+def normalize_tokens(text: str, strip_modifiers: bool = False) -> List[str]:
+    tokens = []
+    for token in normalize_phrase(text).split():
+        normalized = TOKEN_NORMALIZATIONS.get(token, token)
+        if normalized.endswith('s') and len(normalized) > 4 and normalized not in {'nauseous'}:
+            normalized = normalized[:-1]
+        if strip_modifiers and normalized in OPTIONAL_MODIFIERS:
+            continue
+        tokens.append(normalized)
+    return tokens
+
+
+def build_alias_variants(text: str) -> Set[str]:
+    variants = set()
+    exact = normalize_phrase(text)
+    if exact:
+        variants.add(exact)
+
+    normalized_tokens = normalize_tokens(text, strip_modifiers=False)
+    if normalized_tokens:
+        variants.add(' '.join(normalized_tokens))
+
+    reduced_tokens = normalize_tokens(text, strip_modifiers=True)
+    if len(reduced_tokens) >= 2 or (len(reduced_tokens) == 1 and reduced_tokens[0] not in {'pain', 'problem'}):
+        variants.add(' '.join(reduced_tokens))
+
+    return {variant for variant in variants if variant}
 
 
 @dataclass
@@ -56,24 +128,39 @@ class SymptomCatalog:
     def __init__(self, csv_path: Path):
         self.csv_path = csv_path
         self.symptoms: Dict[str, Symptom] = {}
-        self.aliases_map: Dict[str, str] = {}  # alias -> symptom_code
+        self.aliases_map: Dict[str, Set[str]] = defaultdict(set)  # alias -> symptom_codes
         self.load()
     
     def load(self):
-        """Load symptoms from disease-symptom dataset CSV (header row contains all symptoms)."""
+        """Load symptoms from either the large dataset or the structured symptom catalog."""
         self.symptoms.clear()
         self.aliases_map.clear()
-        
-        if not self.csv_path.exists():
+
+        candidate_paths = [
+            self.csv_path,
+            Path(__file__).parent.parent / 'data' / 'symptoms_catalog.csv',
+            Path(__file__).parent.parent / 'symptoms_catalog.csv',
+        ]
+        existing_path = next((path for path in candidate_paths if path.exists()), None)
+
+        if not existing_path:
             logger.warning(f"Symptom catalog not found: {self.csv_path}")
             return
-        
-        # Read first row (header) which contains all symptom names
-        with open(self.csv_path, 'r', encoding='utf-8') as f:
+
+        self.csv_path = existing_path
+
+        with open(existing_path, 'r', encoding='utf-8') as f:
             reader = csv.reader(f)
-            header = next(reader)  # First row: diseases, symptom1, symptom2, ...
-        
-        # Extract symptoms (skip first column "diseases")
+            header = next(reader)
+
+            normalized_header = [column.strip().lower() for column in header[:4]]
+            if normalized_header == ['code', 'name', 'aliases', 'category']:
+                self._load_structured_catalog(reader)
+                logger.info(
+                    f"Loaded {len(self.symptoms)} symptoms with {len(self.aliases_map)} mappings from structured catalog {existing_path.name}"
+                )
+                return
+
         symptom_names = header[1:]
         
         # Auto-categorize symptoms
@@ -96,19 +183,53 @@ class SymptomCatalog:
         for idx, name in enumerate(symptom_names, start=1):
             code = f"S{idx:05d}"
             category = categorize(name)
-            symptom = Symptom(code, name.strip(), [name.strip().lower()], category)
-            self.symptoms[code] = symptom
-            self.aliases_map[name.strip().lower()] = code
+            aliases = sorted(build_alias_variants(name.strip()))
+            symptom = Symptom(code, name.strip(), aliases, category)
+            self._register_symptom(symptom)
         
-        logger.info(f"Loaded {len(self.symptoms)} symptoms with {len(self.aliases_map)} mappings from catalog")
+        logger.info(f"Loaded {len(self.symptoms)} symptoms with {len(self.aliases_map)} mappings from catalog {existing_path.name}")
+
+    def _load_structured_catalog(self, reader):
+        for row in reader:
+            if len(row) < 4:
+                continue
+            code = row[0].strip()
+            name = row[1].strip()
+            aliases_raw = row[2].strip()
+            category = row[3].strip() or 'general'
+            if not code or not name:
+                continue
+
+            aliases = []
+            for alias in [name, *aliases_raw.split('|')]:
+                aliases.extend(build_alias_variants(alias))
+
+            symptom = Symptom(code, name, sorted(set(aliases)), category)
+            self._register_symptom(symptom)
+
+    def _register_symptom(self, symptom: Symptom):
+        self.symptoms[symptom.code] = symptom
+        for alias in symptom.aliases:
+            self.aliases_map[alias].add(symptom.code)
     
     def find_symptom_by_text(self, text: str) -> Tuple[str, Symptom]:
         """Find symptom by matching text. Returns (matched_text, Symptom) or (None, None)."""
-        text_lower = text.lower().strip()
-        code = self.aliases_map.get(text_lower)
-        if code:
-            return text, self.symptoms[code]
+        matches = self.find_symptoms_by_text(text)
+        if matches:
+            return matches[0]
         return None, None
+
+    def find_symptoms_by_text(self, text: str) -> List[Tuple[str, Symptom]]:
+        variants = [variant for variant in build_alias_variants(text) if variant]
+        seen_codes = set()
+        matches: List[Tuple[str, Symptom]] = []
+        for variant in variants:
+            for code in sorted(self.aliases_map.get(variant, set())):
+                if code in seen_codes:
+                    continue
+                seen_codes.add(code)
+                matches.append((variant, self.symptoms[code]))
+        return matches
     
     def add_symptom(self, name: str, category: str = 'general', aliases: List[str] = None):
         """Add new symptom to catalog (used when human approves unknown).
@@ -142,35 +263,45 @@ class SymptomExtractor:
         self.catalog = catalog
     
     def extract_phrases(self, text: str) -> List[str]:
-        """Extract potential symptom phrases - aggressive matching for all catalog symptoms."""
-        text_lower = text.lower()
+        """Extract potential symptom phrases using exact, normalized, and contextual n-gram matching."""
+        text_lower = normalize_phrase(text)
         candidates = []
-        
-        # Strategy 1: Check ALL symptoms in catalog against the transcript
-        # This ensures we don't miss any symptoms that appear in the text
+
+        padded_text = f" {text_lower} "
         for symptom_text in self.catalog.aliases_map.keys():
-            if symptom_text in text_lower:
+            if len(symptom_text) < 3:
+                continue
+            if f" {symptom_text} " in padded_text:
                 candidates.append(symptom_text)
+
+        tokens = text_lower.split()
+        for start in range(len(tokens)):
+            for size in range(1, min(7, len(tokens) - start + 1)):
+                candidate = ' '.join(tokens[start:start + size])
+                for variant in build_alias_variants(candidate):
+                    if variant in self.catalog.aliases_map:
+                        candidates.append(variant)
         
-        # Strategy 2: Pattern-based extraction for additional context
         patterns = [
             r'(?:have|has|had|experiencing|feeling|feel|feels|complains of|reports|presenting with)\s+(?:a\s+)?([a-z\s]{3,40})',
             r'(?:pain in|ache in|discomfort in|tightness in|pressure in)\s+(?:my\s+|the\s+)?([a-z\s]{3,30})',
             r'my\s+([a-z\s]{3,25})\s+(?:hurts|aches|is sore|feels)',
-            r'(?:severe|sharp|dull|mild|chronic)\s+([a-z\s]{3,25})',
+            r'(?:severe|sharp|dull|mild|chronic|burning|upper|lower|low)\s+([a-z\s]{3,25})',
         ]
         
         for pattern in patterns:
             matches = re.findall(pattern, text_lower)
             for match in matches:
-                m = match.strip()
-                # Check if this extracted phrase matches any symptom
-                if m in self.catalog.aliases_map:
-                    candidates.append(m)
-                # Also check partial matches (e.g., "chest pain" from "sharp chest pain")
-                for symptom_text in self.catalog.aliases_map.keys():
-                    if m in symptom_text or symptom_text in m:
-                        candidates.append(symptom_text)
+                m = normalize_phrase(match.strip())
+                for variant in build_alias_variants(m):
+                    if variant in self.catalog.aliases_map:
+                        candidates.append(variant)
+
+        for pattern, canonical_symptom in CONTEXTUAL_SYMPTOM_RULES:
+            if re.search(pattern, text_lower):
+                for variant in build_alias_variants(canonical_symptom):
+                    if variant in self.catalog.aliases_map:
+                        candidates.append(variant)
         
         # Remove duplicates while preserving order
         seen = set()
@@ -213,17 +344,17 @@ class SymptomNormalizer:
         unknown_mentions = []
         
         for phrase in raw_phrases:
-            matched_text, symptom = self.catalog.find_symptom_by_text(phrase)
-            
-            if symptom:
-                # ✅ Known symptom - MATCHED with CSV
-                symptoms_present.append({
-                    'code': symptom.code,
-                    'name': symptom.name,
-                    'matched_text': matched_text,
-                    'category': symptom.category
-                })
-                logger.info(f"[MATCHED] ✅ '{phrase}' → {symptom.code}: {symptom.name} ({symptom.category})")
+            matches = self.catalog.find_symptoms_by_text(phrase)
+
+            if matches:
+                for matched_text, symptom in matches:
+                    symptoms_present.append({
+                        'code': symptom.code,
+                        'name': symptom.name,
+                        'matched_text': matched_text,
+                        'category': symptom.category
+                    })
+                    logger.info(f"[MATCHED] ✅ '{phrase}' → {symptom.code}: {symptom.name} ({symptom.category})")
             else:
                 # ❌ Unknown mention - NOT in CSV
                 unknown_mentions.append(phrase)

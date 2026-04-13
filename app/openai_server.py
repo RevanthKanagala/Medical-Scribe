@@ -12,7 +12,6 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from statistics import mean, median
-from pydub import AudioSegment
 from typing import Optional, List, Dict
 from dotenv import load_dotenv
 # Force reload environment variables to get latest values
@@ -138,28 +137,74 @@ def validate_summary_against_symptoms(summary_text: Optional[str], symptom_data:
     """Verify summary complaints align with validated symptoms."""
     symptoms_present = (symptom_data or {}).get('symptoms_present') or []
     validated_names = [s.get('name', '') for s in symptoms_present if s.get('name')]
-    validated_map = {_normalize_phrase(name): name for name in validated_names if _normalize_phrase(name)}
+    validated_items = []
+    for symptom in symptoms_present:
+        name = symptom.get('name', '')
+        if not name:
+            continue
+        validated_items.append({
+            'code': symptom.get('code'),
+            'name': name,
+            'matched_text': symptom.get('matched_text') or name,
+            'category': symptom.get('category'),
+            'normalized_name': _normalize_phrase(name),
+            'normalized_matched_text': _normalize_phrase(symptom.get('matched_text') or ''),
+        })
 
     section_items = extract_summary_section(summary_text or '', 'CHIEF COMPLAINTS')
     matched_names: List[str] = []
+    matched_codes: List[str] = []
     unmatched_summary_items: List[str] = []
+    summary_items: List[dict] = []
 
     for item in section_items:
         normalized_item = _normalize_phrase(item)
         if not normalized_item:
             continue
         matched = None
-        for norm_name, original_name in validated_map.items():
-            if norm_name in normalized_item or normalized_item in norm_name:
-                matched = original_name
+        for candidate in validated_items:
+            norm_name = candidate['normalized_name']
+            norm_matched_text = candidate['normalized_matched_text']
+            if normalized_item == norm_name or (norm_matched_text and normalized_item == norm_matched_text):
+                matched = candidate
                 break
+        if not matched:
+            for candidate in validated_items:
+                norm_name = candidate['normalized_name']
+                norm_matched_text = candidate['normalized_matched_text']
+                if norm_name and (norm_name in normalized_item or normalized_item in norm_name):
+                    matched = candidate
+                    break
+                if norm_matched_text and (norm_matched_text in normalized_item or normalized_item in norm_matched_text):
+                    matched = candidate
+                    break
         if matched:
-            if matched not in matched_names:
-                matched_names.append(matched)
+            if matched['name'] not in matched_names:
+                matched_names.append(matched['name'])
+            if matched.get('code') and matched['code'] not in matched_codes:
+                matched_codes.append(matched['code'])
+            summary_items.append({
+                'summary_text': item,
+                'matched_symptom_name': matched['name'],
+                'matched_symptom_code': matched.get('code'),
+                'transcript_query': matched.get('matched_text') or matched['name'],
+                'matched_text': matched.get('matched_text') or matched['name'],
+            })
         else:
             unmatched_summary_items.append(item)
+            summary_items.append({
+                'summary_text': item,
+                'matched_symptom_name': None,
+                'matched_symptom_code': None,
+                'transcript_query': item,
+                'matched_text': None,
+            })
 
-    missing_symptoms = [name for name in validated_names if name not in matched_names]
+    missing_symptoms = [
+        symptom['name']
+        for symptom in validated_items
+        if symptom.get('code') not in matched_codes and symptom['name'] not in matched_names
+    ]
     is_valid = not missing_symptoms and not unmatched_summary_items
 
     return {
@@ -168,6 +213,7 @@ def validate_summary_against_symptoms(summary_text: Optional[str], symptom_data:
         'matched_symptoms': matched_names,
         'missing_symptoms': missing_symptoms,
         'unmatched_summary_items': unmatched_summary_items,
+        'summary_items': summary_items,
         'checked_section': 'CHIEF COMPLAINTS',
     }
 
@@ -235,6 +281,7 @@ def compute_dashboard_metrics() -> Dict:
     high_risk_threshold = 4
     high_risk_cases = 0
     high_risk_today = 0
+    high_risk_case_details: List[Dict] = []
     validation_pass = 0
     validation_fail = 0
     validation_evaluations = 0
@@ -302,6 +349,23 @@ def compute_dashboard_metrics() -> Dict:
         symptom_counts.append(symptom_count)
         if symptom_count >= high_risk_threshold or unknown_mentions:
             high_risk_cases += 1
+            risk_flags = []
+            if symptom_count >= high_risk_threshold:
+                risk_flags.append(f"{symptom_count} symptoms")
+            if unknown_mentions:
+                risk_flags.append(f"{len(unknown_mentions)} unknown mention{'s' if len(unknown_mentions) != 1 else ''}")
+
+            high_risk_case_details.append({
+                'consultation_id': entry['id'],
+                'patient_name': entry['patient_name'],
+                'patient_uhid': entry['patient_uhid'],
+                'doctor_name': entry['doctor_name'],
+                'doctor_department': entry['doctor_department'],
+                'visit_datetime': visit_dt.isoformat() if visit_dt else None,
+                'symptom_count': symptom_count,
+                'symptoms': [symptom.get('name') for symptom in symptoms_present if symptom.get('name')][:4],
+                'risk_reason': ', '.join(risk_flags) if risk_flags else 'Flagged for review',
+            })
             if visit_date == today:
                 high_risk_today += 1
         if unknown_mentions:
@@ -442,6 +506,7 @@ def compute_dashboard_metrics() -> Dict:
         'generated_at': now.isoformat(),
         'critical_alerts': {
             'high_risk_cases': high_risk_cases,
+            'high_risk_case_details': high_risk_case_details,
             'validation_failures': validation_fail,
             'pending_summaries': pending_summaries,
             'unknown_mention_cases': unknown_case_count,
@@ -508,26 +573,6 @@ def _get_openai_client():
 
 
 
-# Helper: convert webm to wav using ffmpeg or pydub
-def convert_webm_to_wav(webm_path, wav_path):
-    try:
-        # Try ffmpeg first
-        subprocess.run([
-            'ffmpeg', '-y', '-i', str(webm_path), '-ar', '16000', '-ac', '1', str(wav_path)
-        ], check=True, capture_output=True)
-    except FileNotFoundError:
-        # ffmpeg not found, try pydub as fallback
-        print("[WARNING] ffmpeg not found, trying pydub...")
-        try:
-            from pydub import AudioSegment
-            audio = AudioSegment.from_file(str(webm_path), format="webm")
-            audio = audio.set_frame_rate(16000).set_channels(1)
-            audio.export(str(wav_path), format="wav")
-        except Exception as e:
-            raise RuntimeError(f'Audio conversion failed. Install ffmpeg or pydub: {e}')
-    except Exception as e:
-        raise RuntimeError(f'ffmpeg conversion failed: {e}')
-
 # Transcribe using AssemblyAI
 def mask_patient_info(patient_name: str, uhid: str) -> tuple:
     """Mask patient information for privacy.
@@ -567,6 +612,105 @@ def transcribe_with_assemblyai(path: str, mask_names: bool = True) -> str:
     return text
 
 
+def transcribe_with_openai(path: str) -> str:
+    if not OPENAI_KEY:
+        raise RuntimeError('OPENAI_API_KEY not configured.')
+
+    client, mode = _get_openai_client()
+    with open(path, 'rb') as audio_file:
+        if mode == 'modern':
+            transcript = client.audio.transcriptions.create(
+                model='whisper-1',
+                file=audio_file,
+                response_format='text',
+                language='en',
+                temperature=0,
+            )
+        else:
+            transcript = client.Audio.transcribe(
+                'whisper-1',
+                audio_file,
+                language='en',
+                temperature=0,
+            )
+
+    if isinstance(transcript, str):
+        return transcript
+    if isinstance(transcript, dict):
+        return transcript.get('text', '')
+    return getattr(transcript, 'text', '') or ''
+
+
+def _looks_like_silence_hallucination(text: str) -> bool:
+    normalized = ' '.join((text or '').strip().lower().split())
+    if not normalized:
+        return True
+
+    common_silence_hallucinations = {
+        'you',
+        'thank you',
+        'thanks for watching',
+        'thanks',
+        'bye',
+        'okay',
+        'ok',
+    }
+    if normalized in common_silence_hallucinations:
+        return True
+
+    tokens = normalized.split()
+    if tokens and len(tokens) <= 6 and len(set(tokens)) == 1 and tokens[0] in common_silence_hallucinations:
+        return True
+
+    return False
+
+
+def _is_low_information_transcript(text: Optional[str]) -> bool:
+    normalized = ' '.join((text or '').strip().lower().split())
+    if not normalized:
+        return True
+    if _looks_like_silence_hallucination(normalized):
+        return True
+    return len(normalized) < 12
+
+
+def transcribe_audio_file(path: str, mask_names: bool = True) -> str:
+    assembly_error = None
+    try:
+        text = transcribe_with_assemblyai(path, mask_names)
+        if text and text.strip():
+            return text.strip()
+        print(f"[WARNING] AssemblyAI returned an empty transcript for {path}")
+    except Exception as exc:
+        assembly_error = exc
+        print(f"[WARNING] AssemblyAI transcription failed for {path}: {exc}")
+
+    if OPENAI_KEY:
+        try:
+            print(f"[DEBUG] Falling back to OpenAI Whisper for {path}...")
+            text = transcribe_with_openai(path)
+            if text and text.strip():
+                cleaned_text = text.strip()
+                if _looks_like_silence_hallucination(cleaned_text):
+                    print(
+                        f"[WARNING] OpenAI Whisper returned likely silence hallucination for {path}: {cleaned_text!r}"
+                    )
+                else:
+                    return cleaned_text
+            print(f"[WARNING] OpenAI Whisper also returned an empty transcript for {path}")
+        except Exception as exc:
+            if assembly_error is not None:
+                raise RuntimeError(
+                    f'AssemblyAI failed: {assembly_error}; OpenAI fallback failed: {exc}'
+                ) from exc
+            raise RuntimeError(f'OpenAI fallback failed: {exc}') from exc
+
+    if assembly_error is not None:
+        raise RuntimeError(f'Transcription failed: {assembly_error}') from assembly_error
+
+    raise RuntimeError('No speech detected in the uploaded audio. Try a longer recording or verify the selected microphone.')
+
+
 def generate_medical_summary(
     transcript: str, 
     symptom_data: dict, 
@@ -599,6 +743,7 @@ def generate_medical_summary(
 2. Do NOT invent any information not in the transcript
 3. Extract medicines with exact dosage, timing (morning/afternoon/evening/night), and food instructions (before/after food)
 4. Format medicines as a table
+5. If any validated symptoms are used in chief complaints, copy their names verbatim from the validated list. Do not paraphrase or merge them.
 
 **TRANSCRIPT:**
 {input_text}
@@ -712,10 +857,17 @@ Extract ONLY what is mentioned. Use null for missing information."""
                 report.append(f"  Address: {address_line}")
             report.append("")
         
+        model_complaints = []
+        if data.get('chief_complaints'):
+            model_complaints = [str(item).strip() for item in data['chief_complaints'] if str(item).strip()]
+
         # Chief Complaints
         report.append("CHIEF COMPLAINTS:")
-        if data.get('chief_complaints'):
-            for cc in data['chief_complaints']:
+        if validated_symptoms:
+            for cc in validated_symptoms:
+                report.append(f"  • {cc}")
+        elif model_complaints:
+            for cc in model_complaints:
                 report.append(f"  • {cc}")
         else:
             report.append("  None documented")
@@ -1224,23 +1376,8 @@ async def upload_audio(file: UploadFile = File(...)):
     print(f"[DEBUG] Saved to: {save_path}, size: {len(contents)} bytes")
 
     try:
-        # If webm, convert to wav for AssemblyAI
-        if ext == '.webm' or content_type == 'audio/webm':
-            print("[DEBUG] Detected webm audio, converting to wav...")
-            wav_path = UPLOAD_DIR / f"{base_ts}.wav"
-            try:
-                convert_webm_to_wav(save_path, wav_path)
-                print(f"[DEBUG] Conversion successful, transcribing {wav_path}...")
-                text = await run_in_threadpool(transcribe_with_assemblyai, str(wav_path), MASK_NAMES_IN_TRANSCRIPT)
-                # Clean up wav file after transcription
-                if wav_path.exists():
-                    os.remove(wav_path)
-            except Exception as conv_error:
-                print(f"[ERROR] Conversion error: {conv_error}")
-                raise
-        else:
-            print(f"[DEBUG] Transcribing {save_path} directly...")
-            text = await run_in_threadpool(transcribe_with_assemblyai, str(save_path), MASK_NAMES_IN_TRANSCRIPT)
+        print(f"[DEBUG] Transcribing {save_path} directly (content_type={content_type or 'unknown'})...")
+        text = await run_in_threadpool(transcribe_audio_file, str(save_path), MASK_NAMES_IN_TRANSCRIPT)
         
         print(f"[DEBUG] Transcription successful! Text length: {len(text)} chars")
         print(f"[DEBUG] First 100 chars: {text[:100]}...")
@@ -1265,6 +1402,12 @@ async def extract_symptoms_endpoint(transcript: str = Form(...)):
     
     if not transcript or not transcript.strip():
         return JSONResponse({'error': 'Transcript is empty'}, status_code=400)
+
+    if _is_low_information_transcript(transcript):
+        return JSONResponse(
+            {'error': 'Transcript quality is too low to summarize. Re-record with the correct microphone and clear speech.'},
+            status_code=400,
+        )
     
     try:
         print(f"[DEBUG] Extracting symptoms from {len(transcript)} char transcript...")
