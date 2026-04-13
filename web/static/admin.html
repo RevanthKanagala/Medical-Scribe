@@ -30,11 +30,13 @@
       font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       padding: 32px 20px 48px;
     }
+    .page-topbar {
+      max-width: 1200px;
+      margin: 0 auto 18px;
+      display: flex;
+      justify-content: flex-end;
+    }
     .home-link-floating {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 1000;
       display: inline-flex;
       align-items: center;
       gap: 8px;
@@ -243,10 +245,12 @@
   </style>
 </head>
 <body>
-  <a class="home-link-floating" href="index.html" aria-label="Home">
-    <span>🏠</span>
-    <span>Home</span>
-  </a>
+  <div class="page-topbar">
+    <a class="home-link-floating" href="index.html" aria-label="Home">
+      <span>🏠</span>
+      <span>Home</span>
+    </a>
+  </div>
   <div class="admin-shell">
     <header>
       <span class="pill">Admin Control Room</span>

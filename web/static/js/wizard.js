@@ -8,11 +8,9 @@ const STORAGE_KEYS = {
   consultationId: 'aims_consultation_id',
   validation: 'aims_validation',
   transcript: 'aims_transcript',
-  transcriptFocus: 'aims_transcript_focus',
-  appDataVersion: 'aims_app_data_version'
+  audioPath: 'aims_audio_path',
+  processingState: 'aims_processing_state'
 };
-
-const APP_DATA_VERSION = '2026-04-12-symptom-normalization-v2';
 
 let mediaRecorder;
 let recordedChunks = [];
@@ -253,16 +251,6 @@ function getTranscriptData() {
   return readFromStorage(STORAGE_KEYS.transcript) || '';
 }
 
-function setTranscriptFocus(query) {
-  saveToStorage(STORAGE_KEYS.transcriptFocus, query || '');
-}
-
-function consumeTranscriptFocus() {
-  const query = readFromStorage(STORAGE_KEYS.transcriptFocus) || '';
-  localStorage.removeItem(STORAGE_KEYS.transcriptFocus);
-  return query;
-}
-
 function setValidationData(data) {
   saveToStorage(STORAGE_KEYS.validation, data);
 }
@@ -277,6 +265,34 @@ function setConsultationId(id) {
 
 function getConsultationId() {
   return readFromStorage(STORAGE_KEYS.consultationId);
+}
+
+function setAudioPath(path) {
+  saveToStorage(STORAGE_KEYS.audioPath, path || '');
+}
+
+function getAudioPath() {
+  return readFromStorage(STORAGE_KEYS.audioPath) || '';
+}
+
+function setProcessingState(state) {
+  saveToStorage(STORAGE_KEYS.processingState, state || null);
+}
+
+function getProcessingState() {
+  return readFromStorage(STORAGE_KEYS.processingState);
+}
+
+function clearProcessingState() {
+  localStorage.removeItem(STORAGE_KEYS.processingState);
+}
+
+function clearGeneratedConsultationArtifacts() {
+  localStorage.removeItem(STORAGE_KEYS.summary);
+  localStorage.removeItem(STORAGE_KEYS.symptoms);
+  localStorage.removeItem(STORAGE_KEYS.validation);
+  localStorage.removeItem(STORAGE_KEYS.consultationId);
+  clearProcessingState();
 }
 
 function showToast(message) {
@@ -303,118 +319,17 @@ function isLowInformationTranscript(text) {
   return normalized.length < 12;
 }
 
-function clearGeneratedConsultationArtifacts() {
-  localStorage.removeItem(STORAGE_KEYS.summary);
-  localStorage.removeItem(STORAGE_KEYS.symptoms);
-  localStorage.removeItem(STORAGE_KEYS.validation);
-  localStorage.removeItem(STORAGE_KEYS.consultationId);
-  localStorage.removeItem(STORAGE_KEYS.transcriptFocus);
-}
-
-function ensureCurrentAppDataVersion() {
-  const savedVersion = localStorage.getItem(STORAGE_KEYS.appDataVersion);
-  if (savedVersion === APP_DATA_VERSION) {
-    return;
-  }
-  clearGeneratedConsultationArtifacts();
-  localStorage.setItem(STORAGE_KEYS.appDataVersion, APP_DATA_VERSION);
-}
-
-function createTranscriptJumpButton(query) {
-  if (!query) return null;
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'transcript-jump-btn';
-  button.innerHTML = '<span class="transcript-jump-icon">🔎</span><span>Find in transcript</span>';
-  button.title = `Jump to "${query}" in the transcript`;
-  button.addEventListener('click', () => jumpToTranscript(query));
-  return button;
-}
-
 function escapeHtml(value) {
   return String(value || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/\"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
 
-function buildTranscriptReferenceMarkup(transcript, query) {
-  if (!transcript) {
-    return { markup: '<p>No transcript available.</p>', matchCount: 0 };
-  }
-
-  const escapedTranscript = escapeHtml(transcript);
-  if (!query) {
-    return { markup: escapedTranscript, matchCount: 0 };
-  }
-
-  const escapedQuery = escapeHtml(query);
-  const pattern = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(pattern, 'gi');
-  let matchCount = 0;
-  const markup = escapedTranscript.replace(regex, match => {
-    matchCount += 1;
-    return `<mark class="transcript-highlight">${escapeHtml(match)}</mark>`;
-  });
-  return { markup, matchCount, query: escapedQuery };
-}
-
-function showTranscriptReference(query) {
-  const card = document.getElementById('transcriptReferenceCard');
-  const meta = document.getElementById('transcriptReferenceMeta');
-  const body = document.getElementById('transcriptReferenceBody');
-  if (!card || !meta || !body) {
-    return false;
-  }
-
-  const transcript = getTranscriptData();
-  const { markup, matchCount } = buildTranscriptReferenceMarkup(transcript, query);
-  card.classList.remove('hidden');
-  meta.textContent = query
-    ? `Showing ${matchCount} match(es) for "${query}" in transcript.`
-    : 'Transcript loaded.';
-  body.innerHTML = markup;
-  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  return matchCount > 0;
-}
-
-function highlightTranscriptMatch(query) {
-  const transcriptField = document.getElementById('transcript');
-  if (!transcriptField || !query) return false;
-
-  const transcriptValue = transcriptField.value || '';
-  const startIndex = transcriptValue.toLowerCase().indexOf(query.toLowerCase());
-  if (startIndex === -1) return false;
-
-  const endIndex = startIndex + query.length;
-  transcriptField.focus();
-  transcriptField.setSelectionRange(startIndex, endIndex);
-  const lineHeight = parseInt(window.getComputedStyle(transcriptField).lineHeight, 10) || 22;
-  const linesBefore = transcriptValue.slice(0, startIndex).split('\n').length - 1;
-  transcriptField.scrollTop = Math.max(0, (linesBefore - 2) * lineHeight);
-  return true;
-}
-
-function jumpToTranscript(query) {
-  if (!query) return;
-  setTranscriptFocus(query);
-  const isConsultationPage = document.body.dataset.step === 'consultation';
-  const isSummaryPage = document.body.dataset.step === 'summary';
-  if (isConsultationPage) {
-    if (!highlightTranscriptMatch(query)) {
-      showToast(`Could not find "${query}" in the transcript.`);
-    }
-    return;
-  }
-  if (isSummaryPage) {
-    if (!showTranscriptReference(query)) {
-      showToast(`Could not find "${query}" in the transcript.`);
-    }
-    return;
-  }
-  window.location.href = 'consultation.html';
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function composeSummaryWithContext(summaryText) {
@@ -441,6 +356,53 @@ function composeSummaryWithContext(summaryText) {
   lines.push('');
   const summarySection = summaryText || 'No summary generated.';
   return `${lines.filter(Boolean).join('\n')}${summarySection ? '\n\n' + summarySection : ''}`.trim();
+}
+
+function createDeferredSummary(message, audioPath) {
+  const doctor = getDoctorInfo() || {};
+  const patient = getPatientInfo() || {};
+  const deferredMessage = message || 'Processing is deferred until the service issue is resolved.';
+  const summary = [
+    '============================================================================',
+    'MEDICAL CONSULTATION STATUS',
+    '============================================================================',
+    '',
+    'Status: Deferred processing',
+    `Doctor: ${doctor.name || 'N/A'}`,
+    `Patient: ${patient.name || 'N/A'}`,
+    `UHID: ${patient.uhid || 'Pending'}`,
+    `Visit: ${patient.visitDateTime || new Date().toLocaleString('en-CA')}`,
+    '',
+    'The consultation audio has been saved successfully.',
+    'Transcript, symptom extraction, and summary generation will continue once the issue is resolved.',
+    audioPath ? `Saved audio file: ${audioPath}` : '',
+    `Current issue: ${deferredMessage}`,
+    '',
+    'Presentation note: recording continued without interruption.',
+    '============================================================================'
+  ].filter(Boolean).join('\n');
+  return composeSummaryWithContext(summary);
+}
+
+function activateDeferredProcessing(options = {}) {
+  const state = {
+    processing_deferred: true,
+    stage: options.stage || 'processing',
+    message: options.message || 'Processing is deferred until the issue is resolved.',
+    audio_path: options.audioPath || getAudioPath() || '',
+    created_at: new Date().toISOString()
+  };
+
+  if (state.audio_path) {
+    setAudioPath(state.audio_path);
+  }
+
+  setProcessingState(state);
+  setSummaryData(createDeferredSummary(state.message, state.audio_path));
+  setSymptomsData({ validated: [], unknown: [], summaryItems: [] });
+  setValidationData(null);
+  setConsultationId(null);
+  return state;
 }
 
 async function persistDoctor(payload) {
@@ -801,14 +763,6 @@ function setupConsultationPage() {
   if (goSummaryBtn) goSummaryBtn.addEventListener('click', () => window.location.href = 'summary.html');
 
   populateAudioInputs();
-  const pendingTranscriptFocus = consumeTranscriptFocus();
-  if (pendingTranscriptFocus) {
-    setTimeout(() => {
-      if (!highlightTranscriptMatch(pendingTranscriptFocus)) {
-        showToast(`Could not find "${pendingTranscriptFocus}" in the transcript.`);
-      }
-    }, 100);
-  }
 }
 
 async function startRecording() {
@@ -924,11 +878,27 @@ async function uploadRecording() {
   const fd = new FormData();
   fd.append('file', blob, `recording.${extension}`);
   try {
+    clearGeneratedConsultationArtifacts();
     const res = await fetch('/upload', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.error) {
       clearGeneratedConsultationArtifacts();
       showToast(data.error);
+      return;
+    }
+    if (data.audio_path) {
+      setAudioPath(data.audio_path);
+    }
+    if (data.processing_deferred) {
+      const transcriptField = document.getElementById('transcript');
+      if (transcriptField) transcriptField.value = '';
+      setTranscriptData('');
+      activateDeferredProcessing({
+        stage: data.stage,
+        message: data.message,
+        audioPath: data.audio_path
+      });
+      showToast(data.message || 'Audio saved. Processing is deferred until the issue is fixed.');
       return;
     }
     if (!data.transcript || !data.transcript.trim()) {
@@ -939,6 +909,7 @@ async function uploadRecording() {
     const transcriptField = document.getElementById('transcript');
     if (transcriptField) transcriptField.value = data.transcript || '';
     setTranscriptData(data.transcript || '');
+    clearProcessingState();
   } catch (err) {
     clearGeneratedConsultationArtifacts();
     showToast('Upload failed: ' + err.message);
@@ -955,9 +926,24 @@ async function handleAudioUpload(event) {
   const fd = new FormData();
   fd.append('file', file);
   try {
+    clearGeneratedConsultationArtifacts();
     const res = await fetch('/upload', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.error) return showToast(data.error);
+    if (data.audio_path) {
+      setAudioPath(data.audio_path);
+    }
+    if (data.processing_deferred) {
+      const transcriptField = document.getElementById('transcript');
+      if (transcriptField) transcriptField.value = '';
+      setTranscriptData('');
+      activateDeferredProcessing({
+        stage: data.stage,
+        message: data.message,
+        audioPath: data.audio_path
+      });
+      return showToast(data.message || 'Audio saved. Processing is deferred until the issue is fixed.');
+    }
     if (!data.transcript || !data.transcript.trim()) {
       clearGeneratedConsultationArtifacts();
       return showToast('No speech was detected in the uploaded file.');
@@ -965,6 +951,7 @@ async function handleAudioUpload(event) {
     const transcriptField = document.getElementById('transcript');
     if (transcriptField) transcriptField.value = data.transcript || '';
     setTranscriptData(data.transcript || '');
+    clearProcessingState();
   } catch (err) {
     showToast('Upload failed: ' + err.message);
   }
@@ -972,7 +959,18 @@ async function handleAudioUpload(event) {
 
 async function generateSummary() {
   const transcript = document.getElementById('transcript')?.value;
+  const audioPath = getAudioPath();
+  const existingProcessingState = getProcessingState();
   if (!transcript) {
+    if (audioPath || (existingProcessingState && existingProcessingState.processing_deferred)) {
+      activateDeferredProcessing({
+        stage: 'transcription',
+        message: 'Transcript is not available yet. The saved audio can be processed after the issue is resolved.',
+        audioPath
+      });
+      window.location.href = 'summary.html';
+      return;
+    }
     clearGeneratedConsultationArtifacts();
     return showToast('Transcript is empty.');
   }
@@ -991,14 +989,28 @@ async function generateSummary() {
   fd.append('transcript', transcript);
   fd.append('doctor_info', JSON.stringify(doctor));
   fd.append('patient_info', JSON.stringify(patient));
-  fd.append('audio_path', '');
+  fd.append('audio_path', audioPath || '');
 
   try {
     const res = await fetch('/summarize', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.error) {
-      clearGeneratedConsultationArtifacts();
-      showToast(data.error);
+      activateDeferredProcessing({
+        stage: 'summary',
+        message: data.error,
+        audioPath
+      });
+      showToast('Summary service is unavailable. Showing deferred processing state instead.');
+      window.location.href = 'summary.html';
+      return;
+    }
+    if (data.processing_deferred) {
+      activateDeferredProcessing({
+        stage: data.stage,
+        message: data.message,
+        audioPath: data.audio_path || audioPath
+      });
+      window.location.href = 'summary.html';
       return;
     }
     renderSymptoms(data.symptoms_present, data.unknown_mentions);
@@ -1006,6 +1018,7 @@ async function generateSummary() {
     const summaryOutput = document.getElementById('summaryOutput');
     if (summaryOutput) summaryOutput.textContent = finalSummary;
     setSummaryData(finalSummary);
+    setTranscriptData(transcript);
     setSymptomsData({
       validated: data.symptoms_present,
       unknown: data.unknown_mentions,
@@ -1013,11 +1026,17 @@ async function generateSummary() {
     });
     setValidationData(data.summary_validation || null);
     setConsultationId(data.consultation_id);
+    clearProcessingState();
     showToast('Summary generated successfully.');
     window.location.href = 'summary.html';
   } catch (err) {
-    clearGeneratedConsultationArtifacts();
-    showToast('Summary failed: ' + err.message);
+    activateDeferredProcessing({
+      stage: 'summary',
+      message: `Summary generation failed. ${err.message}`,
+      audioPath
+    });
+    showToast('Summary service is unavailable. Showing deferred processing state instead.');
+    window.location.href = 'summary.html';
   }
 }
 
@@ -1037,11 +1056,10 @@ function renderSymptoms(validated, unknown) {
   if (validated && validated.length) {
     validated.forEach(item => {
       const li = document.createElement('li');
-      const label = document.createElement('span');
-      label.innerHTML = `<strong>${item.name}</strong> (${item.code}) - ${item.category}`;
-      li.appendChild(label);
-      const jumpButton = createTranscriptJumpButton(item.matched_text || item.name);
-      if (jumpButton) li.appendChild(jumpButton);
+      li.className = 'symptom-clickable';
+      li.title = 'Click to find this symptom in the transcript';
+      li.innerHTML = `<span><strong>${item.name}</strong> (${item.code}) — ${item.category}</span><span class="symptom-link-hint">🔍 Find in transcript</span>`;
+      li.addEventListener('click', () => handleSymptomClick(item.name, item.matched_text));
       validList.appendChild(li);
     });
   } else {
@@ -1111,6 +1129,126 @@ function renderValidationResult(validation) {
   detailsEl.innerHTML = detailsHtml;
 }
 
+function highlightTermInTranscript(transcript, term) {
+  if (!transcript || !term) {
+    return { html: escapeHtml(transcript).replace(/\n/g, '<br>'), matches: 0 };
+  }
+
+  const regex = new RegExp(escapeRegex(term), 'gi');
+  let lastIndex = 0;
+  let result = '';
+  let matches = 0;
+  let match;
+
+  while ((match = regex.exec(transcript)) !== null) {
+    result += escapeHtml(transcript.slice(lastIndex, match.index));
+    matches += 1;
+    const className = matches === 1 ? 'symptom-highlight first-match' : 'symptom-highlight';
+    result += `<mark class="${className}">${escapeHtml(match[0])}</mark>`;
+    lastIndex = regex.lastIndex;
+  }
+
+  result += escapeHtml(transcript.slice(lastIndex));
+  return { html: result.replace(/\n/g, '<br>'), matches };
+}
+
+function buildTranscriptSearchTerms(symptomName, matchedText) {
+  const baseTerms = [matchedText, symptomName]
+    .map(value => String(value || '').trim().toLowerCase())
+    .filter(Boolean);
+
+  const modifiers = new Set([
+    'sharp', 'severe', 'mild', 'moderate', 'chronic', 'acute', 'persistent',
+    'really', 'bad', 'extreme', 'significant', 'localized', 'generalized'
+  ]);
+
+  const expandedTerms = [];
+  baseTerms.forEach(term => {
+    expandedTerms.push(term);
+
+    const words = term.split(/\s+/).filter(Boolean);
+    const strippedWords = words.filter(word => !modifiers.has(word));
+    if (strippedWords.length && strippedWords.join(' ') !== term) {
+      expandedTerms.push(strippedWords.join(' '));
+    }
+
+    if (words.length >= 2) {
+      for (let size = words.length - 1; size >= 2; size -= 1) {
+        for (let start = 0; start <= words.length - size; start += 1) {
+          expandedTerms.push(words.slice(start, start + size).join(' '));
+        }
+      }
+    }
+  });
+
+  return [...new Set(expandedTerms)].sort((a, b) => b.length - a.length);
+}
+
+function findBestTranscriptMatch(transcript, symptomName, matchedText) {
+  const terms = buildTranscriptSearchTerms(symptomName, matchedText);
+  for (const term of terms) {
+    const regex = new RegExp(escapeRegex(term), 'i');
+    if (regex.test(transcript)) {
+      return term;
+    }
+  }
+  return null;
+}
+
+function focusTermInConsultationTextarea(term) {
+  const transcriptField = document.getElementById('transcript');
+  if (!transcriptField) return false;
+  const text = transcriptField.value || '';
+  const lowerText = text.toLowerCase();
+  const lowerTerm = String(term || '').toLowerCase();
+  const index = lowerText.indexOf(lowerTerm);
+  if (index === -1) return false;
+
+  transcriptField.focus();
+  transcriptField.setSelectionRange(index, index + lowerTerm.length);
+  const lineBefore = text.slice(0, index).split('\n').length;
+  transcriptField.scrollTop = Math.max(0, (lineBefore - 2) * 20);
+  return true;
+}
+
+function handleSymptomClick(symptomName, matchedText) {
+  const transcript = getTranscriptData() || document.getElementById('transcript')?.value || '';
+  if (!transcript) {
+    showToast('Transcript not available yet.');
+    return;
+  }
+
+  const bestMatch = findBestTranscriptMatch(transcript, symptomName, matchedText);
+
+  const transcriptPanel = document.getElementById('transcriptPanel');
+  const transcriptView = document.getElementById('transcriptView');
+  const transcriptLabel = document.getElementById('transcriptHighlightLabel');
+
+  if (transcriptPanel && transcriptView && transcriptLabel) {
+    const { html, matches } = highlightTermInTranscript(transcript, bestMatch || symptomName);
+    transcriptPanel.classList.remove('hidden');
+    transcriptView.innerHTML = html;
+
+    if (matches > 0) {
+      const label = bestMatch && bestMatch.toLowerCase() !== String(symptomName || '').toLowerCase()
+        ? `Showing ${matches} match(es) for "${bestMatch}" linked from "${symptomName}".`
+        : `Showing ${matches} match(es) for "${symptomName}" in transcript.`;
+      transcriptLabel.textContent = label;
+      const first = transcriptView.querySelector('mark.first-match');
+      if (first) {
+        first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } else {
+      transcriptLabel.textContent = `No direct match found for "${symptomName}" in transcript.`;
+    }
+    return;
+  }
+
+  if (!focusTermInConsultationTextarea(bestMatch || symptomName)) {
+    showToast(`Could not find "${symptomName}" in transcript.`);
+  }
+}
+
 // ---------------------- Summary Page ----------------------
 function setupSummaryPage() {
   const summaryContainer = document.getElementById('summaryOutput');
@@ -1118,7 +1256,19 @@ function setupSummaryPage() {
   const summary = getSummaryData();
   summaryContainer.textContent = summary || 'No summary generated yet.';
 
-  const downloadBtn = document.getElementById('downloadSummaryBtn');
+  const processingBanner = document.getElementById('processingBanner');
+  const processingState = getProcessingState();
+  if (processingBanner) {
+    if (processingState && processingState.processing_deferred) {
+      processingBanner.classList.remove('hidden');
+      processingBanner.innerHTML = `<span>⏳</span><div><strong>Deferred processing</strong><br>${escapeHtml(processingState.message || 'Processing will resume after the issue is resolved.')}</div>`;
+    } else {
+      processingBanner.classList.add('hidden');
+      processingBanner.innerHTML = '';
+    }
+  }
+
+  const downloadBtn = document.getElementById('downloadPdfBtn') || document.getElementById('downloadSummaryBtn');
   if (downloadBtn) {
     downloadBtn.addEventListener('click', downloadSummary);
   }
@@ -1129,11 +1279,6 @@ function setupSummaryPage() {
   }
 
   renderValidationResult(getValidationData());
-
-  const pendingTranscriptFocus = consumeTranscriptFocus();
-  if (pendingTranscriptFocus) {
-    showTranscriptReference(pendingTranscriptFocus);
-  }
 }
 
 function downloadSummary() {
@@ -1141,22 +1286,91 @@ function downloadSummary() {
   if (!summary) {
     return showToast('Nothing to download yet.');
   }
+
+  const jsPdfNamespace = window.jspdf;
+  if (!jsPdfNamespace || !jsPdfNamespace.jsPDF) {
+    showToast('PDF library is unavailable. Please refresh and try again.');
+    return;
+  }
+
   const patient = getPatientInfo() || {};
-  const blob = new Blob([summary], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
+  const doctor = getDoctorInfo() || {};
+  const transcript = getTranscriptData() || '';
   const uhid = patient.uhid || 'UNKNOWN';
-  link.download = `Medical_Summary_${uhid}_${new Date().toISOString().split('T')[0]}.txt`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+
+  const { jsPDF } = jsPdfNamespace;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 42;
+  const textWidth = pageWidth - margin * 2;
+  let y = margin;
+
+  const ensureSpace = (needed = 18) => {
+    if (y + needed > pageHeight - margin) {
+      doc.addPage();
+      y = margin;
+    }
+  };
+
+  const writeHeading = (text) => {
+    ensureSpace(28);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text(text, margin, y);
+    y += 24;
+  };
+
+  const writeLabelValue = (label, value) => {
+    const line = `${label}: ${value || 'N/A'}`;
+    const lines = doc.splitTextToSize(line, textWidth);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    lines.forEach(part => {
+      ensureSpace(16);
+      doc.text(part, margin, y);
+      y += 15;
+    });
+  };
+
+  const writeBlock = (title, content) => {
+    ensureSpace(24);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text(title, margin, y);
+    y += 16;
+
+    const lines = doc.splitTextToSize(content || 'N/A', textWidth);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    lines.forEach(part => {
+      ensureSpace(14);
+      doc.text(part, margin, y);
+      y += 13;
+    });
+    y += 8;
+  };
+
+  const generatedAt = new Date().toLocaleString('en-CA');
+  writeHeading('Medical Consultation Summary');
+  writeLabelValue('Generated', generatedAt);
+  writeLabelValue('Patient UHID', uhid);
+  writeLabelValue('Patient Name', patient.name || 'N/A');
+  writeLabelValue('Doctor', doctor.name || 'N/A');
+  writeLabelValue('Department', doctor.department || 'N/A');
+  writeLabelValue('Designation', doctor.designation || 'N/A');
+  y += 8;
+
+  writeBlock('Summary', summary);
+  if (transcript) {
+    writeBlock('Transcript', transcript);
+  }
+
+  doc.save(`Medical_Summary_${uhid}_${new Date().toISOString().split('T')[0]}.pdf`);
 }
 
 // ---------------------- Bootstrapping ----------------------
 document.addEventListener('DOMContentLoaded', () => {
-  ensureCurrentAppDataVersion();
   populateProgressNav();
   const step = document.body.dataset.step || 'doctor';
   setActiveNav(step);

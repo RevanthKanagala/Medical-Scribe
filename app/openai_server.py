@@ -1350,15 +1350,76 @@ def _parse_visit_datetime(value: Optional[str]) -> datetime:
         return datetime.utcnow()
 
 
+def _build_deferred_summary(
+    *,
+    doctor_info: Optional[dict] = None,
+    patient_info: Optional[dict] = None,
+    audio_path: Optional[str] = None,
+    reason: Optional[str] = None,
+    stage: str = 'processing',
+) -> str:
+    doctor_info = doctor_info or {}
+    patient_info = patient_info or {}
+    lines = [
+        '=' * 80,
+        'MEDICAL CONSULTATION STATUS',
+        '=' * 80,
+        '',
+        'Status: Deferred processing',
+        f'Stage: {stage.title()}',
+        f'Doctor: {doctor_info.get("name", "Not available")}',
+        f'Patient: {patient_info.get("name", "Not available")}',
+        f'UHID: {patient_info.get("uhid", "Pending")}',
+        f'Visit: {patient_info.get("visitDateTime", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}',
+        '',
+        'The consultation audio has been saved successfully.',
+        'Transcript, symptom extraction, and summary generation are queued to continue once the service issue is resolved.',
+    ]
+    if audio_path:
+        lines.extend(['', f'Saved audio file: {audio_path}'])
+    if reason:
+        lines.extend(['', f'Current issue: {reason}'])
+    lines.extend(['', 'Presentation note: recording continued without data loss.', '', '=' * 80])
+    return '\n'.join(lines)
+
+
+def _build_deferred_response(
+    *,
+    stage: str,
+    message: str,
+    audio_path: Optional[str] = None,
+    doctor_info: Optional[dict] = None,
+    patient_info: Optional[dict] = None,
+) -> dict:
+    return {
+        'processing_deferred': True,
+        'stage': stage,
+        'message': message,
+        'audio_saved': bool(audio_path),
+        'audio_path': audio_path,
+        'transcript': '',
+        'transcript_path': None,
+        'summary': _build_deferred_summary(
+            doctor_info=doctor_info,
+            patient_info=patient_info,
+            audio_path=audio_path,
+            reason=message,
+            stage=stage,
+        ),
+        'symptoms_present': [],
+        'unknown_mentions': [],
+        'symptom_count': 0,
+        'consultation_id': None,
+        'summary_validation': None,
+    }
+
+
 
 @app.post('/upload')
 async def upload_audio(file: UploadFile = File(...)):
     orig_name = file.filename or 'audio.webm'
     content_type = getattr(file, 'content_type', '') or ''
     print(f"[DEBUG] Received file: {orig_name}, content_type: {content_type}")
-    
-    if not ASSEMBLYAI_KEY:
-        return JSONResponse({'error': 'ASSEMBLYAI_API_KEY not configured'}, status_code=500)
 
     # Name files using a timestamp (milliseconds) as the base, e.g., 1730918532345.wav/.txt
     base_ts = str(int(time.time() * 1000))
@@ -1391,7 +1452,11 @@ async def upload_audio(file: UploadFile = File(...)):
         error_details = traceback.format_exc()
         print(f"[ERROR] Transcription failed: {str(e)}")
         print(f"[ERROR] Full traceback:\n{error_details}")
-        return JSONResponse({'error': f'Transcription failed: {str(e)}'}, status_code=500)
+        return _build_deferred_response(
+            stage='transcription',
+            message=f'Transcription is temporarily unavailable. Audio is saved and can be processed after the issue is fixed. ({str(e)})',
+            audio_path=str(save_path),
+        )
 
 
 
@@ -1441,19 +1506,30 @@ async def summarize_endpoint(
 
     print(f"[DEBUG] Summarize request received. transcript length: {len(transcript) if transcript else 'None'}")
 
+    doctor_data = json.loads(doctor_info) if doctor_info else {}
+    patient_data = json.loads(patient_info) if patient_info else {}
+
     if not OPENAI_KEY:
-        error_msg = 'OPENAI_API_KEY not configured. Please set OPENAI_API_KEY in your environment or .env file.'
+        error_msg = 'OPENAI_API_KEY not configured. Audio is saved and summary generation will resume after the key is fixed.'
         print(f"[ERROR] {error_msg}")
-        return JSONResponse({'error': error_msg}, status_code=500)
+        return _build_deferred_response(
+            stage='summary',
+            message=error_msg,
+            audio_path=audio_path,
+            doctor_info=doctor_data,
+            patient_info=patient_data,
+        )
 
     if not transcript or not transcript.strip():
-        return JSONResponse({'error': 'Transcript is empty'}, status_code=400)
+        return _build_deferred_response(
+            stage='transcription',
+            message='Transcript is not available yet. Audio is saved and processing can resume after the upstream issue is fixed.',
+            audio_path=audio_path,
+            doctor_info=doctor_data,
+            patient_info=patient_data,
+        )
 
     try:
-        # Parse doctor and patient info
-        doctor_data = json.loads(doctor_info) if doctor_info else {}
-        patient_data = json.loads(patient_info) if patient_info else {}
-        
         # Step 1: Extract symptoms using AIMS pipeline
         print(f"[DEBUG] Step 1: Extracting validated symptoms...")
         symptom_result = await run_in_threadpool(extract_symptoms_from_transcript, transcript)
@@ -1468,6 +1544,14 @@ async def summarize_endpoint(
             doctor_data, 
             patient_data
         )
+        if 'Automated summary generation failed. Manual review required.' in summary:
+            return _build_deferred_response(
+                stage='summary',
+                message='Summary generation is temporarily unavailable. Audio is saved and the final summary can be generated after the issue is resolved.',
+                audio_path=audio_path,
+                doctor_info=doctor_data,
+                patient_info=patient_data,
+            )
         last_summary = summary
         validation_result = validate_summary_against_symptoms(summary, symptom_result)
         
@@ -1509,7 +1593,13 @@ async def summarize_endpoint(
         error_details = traceback.format_exc()
         print(f"[ERROR] Summarization failed: {str(e)}")
         print(f"[ERROR] Full traceback:\n{error_details}")
-        return JSONResponse({'error': f'Summarization failed: {str(e)}'}, status_code=500)
+        return _build_deferred_response(
+            stage='summary',
+            message=f'Summarization is temporarily unavailable. Audio is saved and can be processed later. ({str(e)})',
+            audio_path=audio_path,
+            doctor_info=doctor_data,
+            patient_info=patient_data,
+        )
 
 # Endpoint to view last summary
 @app.get('/summary')

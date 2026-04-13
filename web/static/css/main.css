@@ -9,11 +9,14 @@ body {
   padding: 20px;
 }
 
+.page-topbar {
+  max-width: 1600px;
+  margin: 0 auto 18px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .home-link-floating {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  z-index: 1000;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -562,4 +565,5 @@ textarea.large {
   .header-right { text-align: center; margin-top: 15px; }
   .progress-link { flex: 1 1 45%; }
   .audio-input-panel { grid-template-columns: 1fr; align-items: stretch; }
+  .page-topbar { margin-bottom: 14px; }
 }
